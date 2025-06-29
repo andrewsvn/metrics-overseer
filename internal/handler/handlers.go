@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,27 +23,32 @@ func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
 
 func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		log.Printf("Update request received: method=%s, url=%s", r.Method, r.URL)
+
 		if r.Method != http.MethodPost {
 			http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		parts := strings.Split(r.URL.String(), "/")
-		if len(parts) < 4 {
+		params := strings.Split(strings.TrimPrefix(r.URL.String(), "/update/"), "/")
+		if len(params) < 3 {
 			http.Error(rw, "metric name/value not specified", http.StatusNotFound)
 			return
 		}
 
-		mtype := parts[1]
-		id := parts[2]
-		svalue := parts[3]
+		mtype := params[0]
+		id := params[1]
+		svalue := params[2]
+		log.Printf("Update metrics data: type=%s, id=%s, value=%s",
+			mtype, id, svalue)
+
 		switch mtype {
 		case model.Counter:
 			mh.processCounterValue(rw, id, svalue)
 		case model.Gauge:
 			mh.processGaugeValue(rw, id, svalue)
 		default:
-			http.Error(rw, "invalid metric type", http.StatusBadRequest)
+			http.Error(rw, "unsupported metric type", http.StatusBadRequest)
 		}
 	}
 }
@@ -58,7 +64,7 @@ func (mh *MetricsHandlers) processCounterValue(
 	err = mh.msrv.AccumulateCounter(id, int64(inc))
 	if err != nil {
 		if errors.Is(err, model.ErrMethodNotSupported) {
-			http.Error(rw, "invalid metric type", http.StatusBadRequest)
+			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
 		http.Error(rw, "internal error", http.StatusInternalServerError)
@@ -79,7 +85,7 @@ func (mh *MetricsHandlers) processGaugeValue(
 	err = mh.msrv.SetGauge(id, value)
 	if err != nil {
 		if errors.Is(err, model.ErrMethodNotSupported) {
-			http.Error(rw, "invalid metric type", http.StatusBadRequest)
+			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
 		http.Error(rw, "internal error", http.StatusInternalServerError)

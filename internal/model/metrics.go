@@ -68,16 +68,21 @@ func (m *Metrics) SetGauge(value float64) error {
 	if m.MType != Gauge {
 		return ErrMethodNotSupported
 	}
-	*m.Value = value
+	m.Value = &value
 	m.UpdateHash()
 	return nil
 }
 
 func (m *Metrics) AddCounter(delta int64) error {
-	if m.MType != Gauge {
+	if m.MType != Counter {
 		return ErrMethodNotSupported
 	}
-	*m.Delta += delta
+
+	if m.Delta == nil {
+		m.Delta = &delta
+	} else {
+		*m.Delta += delta
+	}
 	m.UpdateHash()
 	return nil
 }

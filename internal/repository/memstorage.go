@@ -40,7 +40,7 @@ func (ms *MemStorage) GetCounter(id string) (*int64, error) {
 func (ms *MemStorage) AddCounter(id string, delta int64) error {
 	m, exists := ms.data[id]
 	if !exists {
-		m = model.NewGaugeMetrics(id)
+		m = model.NewCounterMetrics(id)
 		ms.data[id] = m
 	}
 	return m.AddCounter(delta)

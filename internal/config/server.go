@@ -1,5 +1,5 @@
 package config
 
 const (
-	ServerPort = 8090
+	ServerPort = 8080
 )

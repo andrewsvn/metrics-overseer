@@ -16,6 +16,7 @@ func main() {
 	msrv := service.NewMetricsService(mstor)
 	mhandlers := handler.NewMetricsHandlers(msrv)
 
-	http.HandleFunc("/update", mhandlers.UpdateHandler())
+	http.HandleFunc("/update/", mhandlers.UpdateHandler())
+	log.Printf("Starting server on port %d\n", config.ServerPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.ServerPort), nil))
 }
