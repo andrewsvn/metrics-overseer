@@ -22,6 +22,11 @@ func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
 
 func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		parts := strings.Split(r.URL.String(), "/")
 		if len(parts) < 4 {
 			http.Error(rw, "metric name/value not specified", http.StatusNotFound)
