@@ -11,9 +11,8 @@ const (
 	Gauge   = "gauge"
 )
 
-// Delta и Value объявлены через указатели,
-// чтоы отличать значение "0", от не заданного значения
-// и соответственно не кодировать в структуру.
+// store Delta and Value as pointers to support uninitialized state
+// separated from default value without additional flags
 type Metrics struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
