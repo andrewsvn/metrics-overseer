@@ -1,3 +1,7 @@
 package main
 
-func main() {}
+import "github.com/andrewsvn/metrics-overseer/internal/agent"
+
+func main() {
+	agent.NewAgent().Start()
+}
