@@ -15,7 +15,7 @@ func NewMemStorage() *MemStorage {
 func (ms *MemStorage) GetGauge(id string) (*float64, error) {
 	m, exists := ms.data[id]
 	if !exists {
-		return nil, nil
+		return nil, ErrMetricNotFound
 	}
 	return m.GetGauge()
 }
@@ -32,7 +32,7 @@ func (ms *MemStorage) SetGauge(id string, value float64) error {
 func (ms *MemStorage) GetCounter(id string) (*int64, error) {
 	m, exists := ms.data[id]
 	if !exists {
-		return nil, nil
+		return nil, ErrMetricNotFound
 	}
 	return m.GetCounter()
 }

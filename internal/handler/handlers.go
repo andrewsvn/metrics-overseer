@@ -32,7 +32,7 @@ func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 
 		params := strings.Split(strings.TrimPrefix(r.URL.String(), "/update/"), "/")
 		if len(params) < 3 {
-			http.Error(rw, "metric name/value not specified", http.StatusNotFound)
+			http.Error(rw, "metric name and/or value not specified", http.StatusNotFound)
 			return
 		}
 

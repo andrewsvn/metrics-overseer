@@ -22,6 +22,10 @@ func NewMetricAccumulator(id string, mtype string) *MetricAccumulator {
 }
 
 func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
+	if ma.MType != model.Counter {
+		return model.ErrMethodNotSupported
+	}
+
 	if ma.Delta == nil {
 		ma.Delta = &inc
 	} else {
@@ -31,38 +35,46 @@ func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 }
 
 func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
+	if ma.MType != model.Gauge {
+		return model.ErrMethodNotSupported
+	}
+
 	ma.Values = append(ma.Values, value)
 	return nil
 }
 
-func (ma *MetricAccumulator) ExtractAndSend(ms sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) ExtractAndSend(sendfunc sender.MetricSendFunc) error {
 	switch ma.MType {
 	case model.Counter:
-		return ma.extractAndSendCounter(ms)
+		return ma.extractAndSendCounter(sendfunc)
 	case model.Gauge:
-		return ma.extractAndSendGauge(ms)
+		return ma.extractAndSendGauge(sendfunc)
 	default:
 		return model.ErrMethodNotSupported
 	}
 }
 
-func (ma *MetricAccumulator) extractAndSendCounter(ms sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) extractAndSendCounter(sendfunc sender.MetricSendFunc) error {
 	if ma.Delta == nil {
 		return nil
 	}
 
 	total := *ma.Delta
-	err := ms(ma.ID, ma.MType, strconv.FormatInt(total, 10))
+	err := sendfunc(ma.ID, ma.MType, strconv.FormatInt(total, 10))
 	if err != nil {
 		return err
 	}
 
 	// if send is successful, remove sent values
-	*ma.Delta -= total
+	if *ma.Delta == total {
+		ma.Delta = nil
+	} else {
+		*ma.Delta -= total
+	}
 	return nil
 }
 
-func (ma *MetricAccumulator) extractAndSendGauge(ms sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) extractAndSendGauge(sendfunc sender.MetricSendFunc) error {
 	if len(ma.Values) == 0 {
 		return nil
 	}
@@ -75,7 +87,7 @@ func (ma *MetricAccumulator) extractAndSendGauge(ms sender.MetricSendFunc) error
 	}
 	total /= float64(count)
 
-	err := ms(ma.ID, ma.MType, strconv.FormatFloat(total, 'f', 6, 64))
+	err := sendfunc(ma.ID, ma.MType, strconv.FormatFloat(total, 'f', 6, 64))
 	if err != nil {
 		return err
 	}

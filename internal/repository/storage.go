@@ -1,5 +1,7 @@
 package repository
 
+import "errors"
+
 // all methods have an option to return error in case
 // when some internal storage problem occurs
 // or method is unsupported for chosen metric
@@ -13,3 +15,7 @@ type Storage interface {
 
 	ResetAll() error
 }
+
+var (
+	ErrMetricNotFound = errors.New("metric not found in storage")
+)
