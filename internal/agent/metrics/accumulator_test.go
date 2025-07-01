@@ -31,7 +31,7 @@ func TestCounterAccumulator(t *testing.T) {
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, int64(0), *cntAcc.Delta)
+	assert.Nil(t, cntAcc.Delta)
 
 	cntAcc.AccumulateCounter(5)
 	err = cntAcc.ExtractAndSend(func(id, mtype, value string) error {

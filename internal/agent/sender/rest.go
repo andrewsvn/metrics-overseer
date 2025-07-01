@@ -27,7 +27,7 @@ func NewRestSender(host string, port int16) *RestSender {
 func (rs RestSender) MetricSendFunc() MetricSendFunc {
 	return func(id string, mtype string, value string) error {
 		req, err := http.NewRequest(http.MethodPost,
-			rs.composePostMetricUrl(mtype, id, value), nil)
+			rs.composePostMetricURL(mtype, id, value), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -51,7 +51,7 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 	}
 }
 
-func (rs RestSender) composePostMetricUrl(id string, mtype string, value string) string {
+func (rs RestSender) composePostMetricURL(id string, mtype string, value string) string {
 	return fmt.Sprintf("%s:%d/update/%s/%s/%s",
 		rs.host, rs.port, mtype, id, value)
 }
