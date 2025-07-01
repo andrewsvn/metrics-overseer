@@ -94,8 +94,8 @@ func (a *Agent) report() {
 		time.Sleep(time.Duration(a.reportInterval) * time.Millisecond)
 
 		log.Printf("[INFO] Reporting metrics to server")
-		for name, ga := range a.accums {
-			err := ga.ExtractAndSend(a.sndr.GaugeMetricSendFunc())
+		for name, ma := range a.accums {
+			err := ma.ExtractAndSend(a.sndr.MetricSendFunc())
 			if err != nil {
 				log.Printf("[ERROR] unable to send metric %s to server", name)
 			}

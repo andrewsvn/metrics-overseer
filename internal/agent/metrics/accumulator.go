@@ -52,7 +52,7 @@ func (ma *MetricAccumulator) extractAndSendCounter(ms sender.MetricSendFunc) err
 	}
 
 	total := *ma.Delta
-	err := ms(ma.ID, strconv.FormatInt(total, 10))
+	err := ms(ma.ID, ma.MType, strconv.FormatInt(total, 10))
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (ma *MetricAccumulator) extractAndSendGauge(ms sender.MetricSendFunc) error
 	}
 	total /= float64(count)
 
-	err := ms(ma.ID, strconv.FormatFloat(total, 'f', 6, 64))
+	err := ms(ma.ID, ma.MType, strconv.FormatFloat(total, 'f', 6, 64))
 	if err != nil {
 		return err
 	}
