@@ -41,8 +41,7 @@ func NewAgent() *Agent {
 
 func (a *Agent) Start() {
 	log.Printf("[INFO] Starting metrics-overseer agent")
-	log.Printf("[INFO] Agent poll interval = %d ms, report interval = %d ms",
-		a.pollInterval, a.reportInterval)
+	log.Printf("[INFO] Agent poll interval = %d ms, report interval = %d ms", a.pollInterval, a.reportInterval)
 	log.Printf("[INFO] Agent reporting server: %s:%d", a.serverHost, a.serverPort)
 
 	go a.poll()

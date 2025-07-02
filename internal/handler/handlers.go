@@ -39,8 +39,7 @@ func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 		mtype := params[0]
 		id := params[1]
 		svalue := params[2]
-		log.Printf("Update metrics data: type=%s, id=%s, value=%s",
-			mtype, id, svalue)
+		log.Printf("Update metrics data: type=%s, id=%s, value=%s", mtype, id, svalue)
 
 		switch mtype {
 		case model.Counter:

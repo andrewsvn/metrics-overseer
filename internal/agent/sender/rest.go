@@ -26,8 +26,7 @@ func NewRestSender(host string, port int16) *RestSender {
 
 func (rs RestSender) MetricSendFunc() MetricSendFunc {
 	return func(id string, mtype string, value string) error {
-		req, err := http.NewRequest(http.MethodPost,
-			rs.composePostMetricURL(mtype, id, value), nil)
+		req, err := http.NewRequest(http.MethodPost, rs.composePostMetricURL(mtype, id, value), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -44,8 +43,7 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 			return err
 		}
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("error received from metric server (%d) %s",
-				resp.StatusCode, body)
+			return fmt.Errorf("error received from metric server (%d) %s", resp.StatusCode, body)
 		}
 		return nil
 	}
