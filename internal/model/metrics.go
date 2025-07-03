@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 const (
@@ -100,4 +101,22 @@ func (m *Metrics) UpdateHash() {
 	}
 
 	m.Hash = string(md5.New().Sum(bytes))
+}
+
+func (m Metrics) StringValue() string {
+	const NotAvailable = "N/A"
+	switch m.MType {
+	case Counter:
+		if m.Delta == nil {
+			return NotAvailable
+		}
+		return strconv.FormatInt(*m.Delta, 10)
+	case Gauge:
+		if m.Value == nil {
+			return NotAvailable
+		}
+		return strconv.FormatFloat(*m.Value, 'f', -1, 64)
+	default:
+		return NotAvailable
+	}
 }

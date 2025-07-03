@@ -1,6 +1,11 @@
 package repository
 
-import "github.com/andrewsvn/metrics-overseer/internal/model"
+import (
+	"slices"
+	"strings"
+
+	"github.com/andrewsvn/metrics-overseer/internal/model"
+)
 
 type MemStorage struct {
 	data map[string]*model.Metrics
@@ -44,6 +49,17 @@ func (ms *MemStorage) AddCounter(id string, delta int64) error {
 		ms.data[id] = m
 	}
 	return m.AddCounter(delta)
+}
+
+func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {
+	mlist := make([]*model.Metrics, 0, len(ms.data))
+	for _, v := range ms.data {
+		mlist = append(mlist, v)
+	}
+	slices.SortFunc(mlist, func(a *model.Metrics, b *model.Metrics) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	return mlist, nil
 }
 
 func (ms *MemStorage) ResetAll() error {

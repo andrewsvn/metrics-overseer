@@ -1,6 +1,10 @@
 package repository
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/andrewsvn/metrics-overseer/internal/model"
+)
 
 // all methods have an option to return error in case
 // when some internal storage problem occurs
@@ -12,6 +16,9 @@ type Storage interface {
 
 	GetCounter(id string) (*int64, error)
 	AddCounter(id string, delta int64) error
+
+	// should return full list of metric sorted by id lexicographically
+	GetAllSorted() ([]*model.Metrics, error)
 
 	ResetAll() error
 }

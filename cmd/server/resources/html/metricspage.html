@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>metrics-overseer: collected metrics</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h3>Collected metrics</h3>
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Kind</th>
+            <th>Value</th>
+        </tr>
+        {{range .Metrics}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.MType}}</td>
+            <td>{{.StringValue}}</td>
+        </tr>
+        {{end}}
+    </table>
+</body>

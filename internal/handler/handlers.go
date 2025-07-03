@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
+	"github.com/go-chi/chi/v5"
 )
 
 type MetricsHandlers struct {
@@ -23,38 +23,54 @@ func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
 
 func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		log.Printf("Update request received: method=%s, url=%s", r.Method, r.URL)
-
-		if r.Method != http.MethodPost {
-			http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		params := strings.Split(strings.TrimPrefix(r.URL.String(), "/update/"), "/")
-		if len(params) < 3 {
-			http.Error(rw, "metric name and/or value not specified", http.StatusNotFound)
-			return
-		}
-
-		mtype := params[0]
-		id := params[1]
-		svalue := params[2]
-		log.Printf("Update metrics data: type=%s, id=%s, value=%s", mtype, id, svalue)
+		log.Printf("Received request: %s", r.URL)
+		mtype := chi.URLParam(r, "mtype")
+		id := chi.URLParam(r, "id")
+		svalue := chi.URLParam(r, "value")
+		log.Printf("Updating metric of type %s: id=%s, value=%s", mtype, id, svalue)
 
 		switch mtype {
 		case model.Counter:
-			mh.processCounterValue(rw, id, svalue)
+			mh.processUpdateCounterValue(rw, id, svalue)
 		case model.Gauge:
-			mh.processGaugeValue(rw, id, svalue)
+			mh.processUpdateGaugeValue(rw, id, svalue)
 		default:
 			http.Error(rw, "unsupported metric type", http.StatusBadRequest)
 		}
 	}
 }
 
-func (mh *MetricsHandlers) processCounterValue(
-	rw http.ResponseWriter, id string, svalue string) {
+func (mh *MetricsHandlers) GetValueHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		mtype := chi.URLParam(r, "mtype")
+		id := chi.URLParam(r, "id")
+		log.Printf("Fetching metric value of type %s: id=%s", mtype, id)
 
+		switch mtype {
+		case model.Counter:
+			mh.processGetCounterValue(rw, id)
+		case model.Gauge:
+			mh.processGetGaugeValue(rw, id)
+		default:
+			http.Error(rw, "unsupported metric type", http.StatusBadRequest)
+		}
+	}
+}
+
+func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		err := mh.msrv.GenerateAllMetricsHtml(rw)
+		if err != nil {
+			log.Printf("[ERROR] unable to render metrics page: %v", err)
+			http.Error(rw, "unable to render metrics page", http.StatusInternalServerError)
+			return
+		}
+
+		rw.Header().Add("Content-Type", "text/html")
+	}
+}
+
+func (mh *MetricsHandlers) processUpdateCounterValue(rw http.ResponseWriter, id string, svalue string) {
 	inc, err := strconv.Atoi(svalue)
 	if err != nil {
 		http.Error(rw, "invalid metric value", http.StatusBadRequest)
@@ -66,6 +82,7 @@ func (mh *MetricsHandlers) processCounterValue(
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
+		log.Printf("[ERROR] unable to update counter value: %v", err)
 		http.Error(rw, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -73,9 +90,7 @@ func (mh *MetricsHandlers) processCounterValue(
 	rw.WriteHeader(http.StatusOK)
 }
 
-func (mh *MetricsHandlers) processGaugeValue(
-	rw http.ResponseWriter, id string, svalue string) {
-
+func (mh *MetricsHandlers) processUpdateGaugeValue(rw http.ResponseWriter, id string, svalue string) {
 	value, err := strconv.ParseFloat(svalue, 64)
 	if err != nil {
 		http.Error(rw, "invalid metric value", http.StatusBadRequest)
@@ -87,9 +102,44 @@ func (mh *MetricsHandlers) processGaugeValue(
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
+		log.Printf("[ERROR] unable to update gauge value: %v", err)
 		http.Error(rw, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	rw.WriteHeader(http.StatusOK)
+}
+
+func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id string) {
+	pval, err := mh.msrv.GetCounter(id)
+	if err != nil {
+		log.Printf("[ERROR] unable to get counter value: %v", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if pval == nil {
+		http.Error(rw, "metric not found", http.StatusNotFound)
+		return
+	}
+
+	rw.Header().Add("Content-Type", "text/plain")
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+}
+
+func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id string) {
+	pval, err := mh.msrv.GetGauge(id)
+	if err != nil {
+		log.Printf("[ERROR] unable to get gauge value: %v", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if pval == nil {
+		http.Error(rw, "metric not found", http.StatusNotFound)
+		return
+	}
+
+	rw.Header().Add("Content-Type", "text/plain")
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
 }
