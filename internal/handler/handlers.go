@@ -68,7 +68,7 @@ func (mh *MetricsHandlers) GetValueHandler() http.HandlerFunc {
 
 func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		err := mh.msrv.GenerateAllMetricsHtml(rw)
+		err := mh.msrv.GenerateAllMetricsHTML(rw)
 		if err != nil {
 			log.Printf("[ERROR] unable to render metrics page: %v", err)
 			http.Error(rw, "unable to render metrics page", http.StatusInternalServerError)

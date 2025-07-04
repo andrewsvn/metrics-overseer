@@ -39,7 +39,7 @@ func (ms *MetricsService) GetGauge(id string) (*float64, error) {
 	return ms.storage.GetGauge(id)
 }
 
-func (ms *MetricsService) GenerateAllMetricsHtml(w io.Writer) error {
+func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 	if ms.allMetricsTmpl == nil {
 		tmpl, err := template.ParseFiles("resources/html/metricspage.html")
 		if err != nil {
