@@ -25,10 +25,10 @@ type Agent struct {
 }
 
 func NewAgent(cfg *agentcfg.Config) *Agent {
-	sndr := sender.NewRestSender(cfg.ServerAddr)
+	sndr := sender.NewRestSender(cfg.ServerAddr())
 
 	return &Agent{
-		serverAddr:   cfg.ServerAddr,
+		serverAddr:   cfg.ServerAddr(),
 		pollIntSec:   cfg.PollIntervalSec,
 		reportIntSec: cfg.ReportIntervalSec,
 
