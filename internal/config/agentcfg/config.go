@@ -13,18 +13,16 @@ const (
 	defaultReportIntervalSec = 10
 )
 
-type EnrichedNetAddress string
+type enrichedServerAddress string
 
-func (ena *EnrichedNetAddress) String() string {
+func (ena *enrichedServerAddress) String() string {
+	if *ena == "" {
+		return defaultServerAddr
+	}
 	return string(*ena)
 }
 
-func (ena *EnrichedNetAddress) Set(addr string) error {
-	if addr == "" {
-		*ena = defaultServerAddr
-		return nil
-	}
-
+func (ena *enrichedServerAddress) Set(addr string) error {
 	re := regexp.MustCompile(`^(?:((?:http|https)://)?([^:]+))?(:\d+)$`)
 	parts := re.FindStringSubmatch(addr)
 	if parts == nil {
@@ -37,30 +35,30 @@ func (ena *EnrichedNetAddress) Set(addr string) error {
 	if parts[2] == "" {
 		parts[2] = "localhost"
 	}
-	*ena = EnrichedNetAddress(strings.Join(parts[1:], ""))
+	*ena = enrichedServerAddress(strings.Join(parts[1:], ""))
 	return nil
 }
 
 type Config struct {
-	addr              EnrichedNetAddress
+	addr              enrichedServerAddress
 	PollIntervalSec   int64
 	ReportIntervalSec int64
 }
 
 func (cfg Config) ServerAddr() string {
-	return string(cfg.addr)
+	return cfg.addr.String()
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		addr:              defaultServerAddr,
+		addr:              "",
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,
 	}
 }
 
-func (c *Config) BindFlags() {
-	flag.Var(&c.addr, "a", fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
-	flag.Int64Var(&c.PollIntervalSec, "p", 2, "metrics polling interval, seconds (default: 2)")
-	flag.Int64Var(&c.ReportIntervalSec, "r", 10, "metrics reporting interval, seconds (default: 10)")
+func (cfg *Config) BindFlags() {
+	flag.Var(&cfg.addr, "a", fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
+	flag.Int64Var(&cfg.PollIntervalSec, "p", 2, "metrics polling interval, seconds (default: 2)")
+	flag.Int64Var(&cfg.ReportIntervalSec, "r", 10, "metrics reporting interval, seconds (default: 10)")
 }

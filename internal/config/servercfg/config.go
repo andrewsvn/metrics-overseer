@@ -19,6 +19,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-func (c *Config) BindFlags() {
-	flag.StringVar(&c.Addr, "a", defaultAddr, fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
+func (cfg *Config) BindFlags() {
+	flag.StringVar(&cfg.Addr, "a", defaultAddr, fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
 }
