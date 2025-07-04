@@ -11,38 +11,36 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent/metrics"
 	"github.com/andrewsvn/metrics-overseer/internal/agent/sender"
-	config "github.com/andrewsvn/metrics-overseer/internal/config/agent"
+	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 )
 
 type Agent struct {
-	serverHost     string
-	serverPort     int32
-	pollInterval   int64
-	reportInterval int64
+	serverAddr   string
+	pollIntSec   int64
+	reportIntSec int64
 
 	accums   map[string]*metrics.MetricAccumulator
 	sendfunc sender.MetricSendFunc
 }
 
-func NewAgent() *Agent {
-	sndr := sender.NewRestSender(config.ServerHost, config.ServerPort)
+func NewAgent(cfg *agentcfg.Config) *Agent {
+	sndr := sender.NewRestSender(cfg.ServerAddr)
 
 	return &Agent{
-		serverHost:     config.ServerHost,
-		serverPort:     config.ServerPort,
-		pollInterval:   config.PollIntervalMs,
-		reportInterval: config.ReportIntervalMs,
+		serverAddr:   cfg.ServerAddr,
+		pollIntSec:   cfg.PollIntervalSec,
+		reportIntSec: cfg.ReportIntervalSec,
 
 		accums:   make(map[string]*metrics.MetricAccumulator),
 		sendfunc: sndr.MetricSendFunc(),
 	}
 }
 
-func (a *Agent) Start() {
+func (a *Agent) Run() {
 	log.Printf("[INFO] Starting metrics-overseer agent")
-	log.Printf("[INFO] Agent poll interval = %d ms, report interval = %d ms", a.pollInterval, a.reportInterval)
-	log.Printf("[INFO] Agent reporting server: %s:%d", a.serverHost, a.serverPort)
+	log.Printf("[INFO] Agent poll interval = %d s, report interval = %d s", a.pollIntSec, a.reportIntSec)
+	log.Printf("[INFO] Agent reporting server: %s", a.serverAddr)
 
 	go a.poll()
 	go a.report()
@@ -54,7 +52,7 @@ func (a *Agent) Start() {
 
 func (a *Agent) poll() {
 	for {
-		time.Sleep(time.Duration(a.pollInterval) * time.Millisecond)
+		time.Sleep(time.Duration(a.pollIntSec) * time.Second)
 		a.execPoll()
 	}
 }
@@ -99,7 +97,7 @@ func (a *Agent) execPoll() {
 
 func (a *Agent) report() {
 	for {
-		time.Sleep(time.Duration(a.reportInterval) * time.Millisecond)
+		time.Sleep(time.Duration(a.reportIntSec) * time.Second)
 		a.execReport()
 	}
 }
@@ -115,9 +113,6 @@ func (a *Agent) execReport() {
 }
 
 func (a *Agent) storeCounterMetric(id string, delta int64) {
-	// TODO: debug
-	log.Printf("[DEBUG] Storing metric %s, value %d", id, delta)
-
 	ma, exist := a.accums[id]
 	if !exist {
 		ma = metrics.NewMetricAccumulator(id, model.Counter)
@@ -130,9 +125,6 @@ func (a *Agent) storeCounterMetric(id string, delta int64) {
 }
 
 func (a *Agent) storeGaugeMetric(id string, value float64) {
-	// TODO: debug
-	log.Printf("[DEBUG] Storing metric %s, value %f", id, value)
-
 	ma, exist := a.accums[id]
 	if !exist {
 		ma = metrics.NewMetricAccumulator(id, model.Gauge)

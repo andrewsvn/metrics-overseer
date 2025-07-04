@@ -4,12 +4,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAgentAccumulators(t *testing.T) {
-	a := NewAgent()
+	a := NewAgent(agentcfg.DefaultConfig())
 	assert.Empty(t, a.accums)
 
 	a.storeCounterMetric("cnt1", 1)
@@ -25,7 +26,7 @@ func TestAgentAccumulators(t *testing.T) {
 }
 
 func TestAgentPolling(t *testing.T) {
-	a := NewAgent()
+	a := NewAgent(agentcfg.DefaultConfig())
 	a.execPoll()
 	assert.Greater(t, len(a.accums), 2)
 	_, exists := a.accums["RandomValue"]
@@ -35,7 +36,7 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	a := NewAgent()
+	a := NewAgent(agentcfg.DefaultConfig())
 
 	a.storeCounterMetric("cnt1", 1)
 	a.storeCounterMetric("cnt2", 0)

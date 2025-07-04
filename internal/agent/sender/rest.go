@@ -7,20 +7,17 @@ import (
 )
 
 type RestSender struct {
-	host string
-	port int16
+	addr string
 
 	// we use custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
 }
 
-func NewRestSender(host string, port int16) *RestSender {
+func NewRestSender(addr string) *RestSender {
 	return &RestSender{
-		host: host,
-		port: port,
-
-		cl: &http.Client{},
+		addr: addr,
+		cl:   &http.Client{},
 	}
 }
 
@@ -50,6 +47,5 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 }
 
 func (rs RestSender) composePostMetricURL(id string, mtype string, value string) string {
-	return fmt.Sprintf("%s:%d/update/%s/%s/%s",
-		rs.host, rs.port, mtype, id, value)
+	return fmt.Sprintf("%s/update/%s/%s/%s", rs.addr, mtype, id, value)
 }
