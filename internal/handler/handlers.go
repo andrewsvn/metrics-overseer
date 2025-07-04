@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
+	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -21,9 +22,17 @@ func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
 	}
 }
 
+func (mh *MetricsHandlers) GetRouter() *chi.Mux {
+	r := chi.NewRouter()
+	r.Post("/update/{mtype}/{id}/{value}", mh.UpdateHandler())
+	r.Get("/value/{mtype}/{id}", mh.GetValueHandler())
+	r.Get("/", mh.ShowMetricsPage())
+
+	return r
+}
+
 func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		log.Printf("Received request: %s", r.URL)
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
 		svalue := chi.URLParam(r, "value")
@@ -113,33 +122,41 @@ func (mh *MetricsHandlers) processUpdateGaugeValue(rw http.ResponseWriter, id st
 func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id string) {
 	pval, err := mh.msrv.GetCounter(id)
 	if err != nil {
+		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrMethodNotSupported) {
+			http.Error(rw, "metric not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("[ERROR] unable to get counter value: %v", err)
 		http.Error(rw, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if pval == nil {
-		http.Error(rw, "metric not found", http.StatusNotFound)
 		return
 	}
 
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
-	rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+	if pval == nil {
+		rw.Write([]byte("nil"))
+	} else {
+		rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+	}
 }
 
 func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id string) {
 	pval, err := mh.msrv.GetGauge(id)
 	if err != nil {
+		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrMethodNotSupported) {
+			http.Error(rw, "metric not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("[ERROR] unable to get gauge value: %v", err)
 		http.Error(rw, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if pval == nil {
-		http.Error(rw, "metric not found", http.StatusNotFound)
 		return
 	}
 
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
-	rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
+	if pval == nil {
+		rw.Write([]byte("nil"))
+	} else {
+		rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
+	}
 }

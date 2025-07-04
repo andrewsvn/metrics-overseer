@@ -65,3 +65,31 @@ func TestMemStorageGauges(t *testing.T) {
 	_, err = ms.GetCounter("gauge1")
 	assert.ErrorAs(t, err, &model.ErrMethodNotSupported)
 }
+
+func TestMemStorageGetAll(t *testing.T) {
+	ms := NewMemStorage()
+
+	ms.SetGauge("1gauge1", 1.11)
+	ms.SetGauge("2gauge2", 3.33)
+	ms.AddCounter("1cnt1", 1)
+	ms.AddCounter("2cnt2", 2)
+
+	metrics, err := ms.GetAllSorted()
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(metrics))
+	assert.Equal(t, "1cnt1", metrics[0].ID)
+	assert.Equal(t, "1gauge1", metrics[1].ID)
+
+	ms.SetGauge("0gauge0", 2.22)
+	ms.SetGauge("2gauge2", -3.33)
+	ms.AddCounter("0cnt0", 3)
+	ms.AddCounter("2cnt2", -2)
+
+	metrics, err = ms.GetAllSorted()
+	assert.NoError(t, err)
+	assert.Equal(t, 6, len(metrics))
+	assert.Equal(t, "0cnt0", metrics[0].ID)
+	assert.Equal(t, "0gauge0", metrics[1].ID)
+	assert.Equal(t, "2cnt2", metrics[4].ID)
+	assert.Equal(t, "2gauge2", metrics[5].ID)
+}
