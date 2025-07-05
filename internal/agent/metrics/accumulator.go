@@ -36,7 +36,7 @@ func NewMetricAccumulator(id string, mtype string) *MetricAccumulator {
 
 func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 	if ma.MType != model.Counter {
-		return model.ErrIncorrectAccess
+		return fmt.Errorf("%w: expected counter, got %v", model.ErrIncorrectAccess, ma.MType)
 	}
 
 	if ma.Delta == nil {
