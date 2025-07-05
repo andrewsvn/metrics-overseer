@@ -16,7 +16,7 @@ type RestSender struct {
 }
 
 func NewRestSender(addr string) (*RestSender, error) {
-	enrichedAddr, err := EnrichServerAddress(addr)
+	enrichedAddr, err := enrichServerAddress(addr)
 	if err != nil {
 		return nil, fmt.Errorf("can't enrich address for sender to a proper format: %w", err)
 	}

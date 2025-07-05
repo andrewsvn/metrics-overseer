@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func EnrichServerAddress(addr string) (string, error) {
+func enrichServerAddress(addr string) (string, error) {
 	re, err := regexp.Compile(`^(?:((?:http|https)://)?([^:]+))?(:\d+)$`)
 	if err != nil {
 		return "", fmt.Errorf("can't compile regexp for network address enrichment: %w", err)
