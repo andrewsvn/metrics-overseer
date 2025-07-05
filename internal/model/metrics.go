@@ -23,7 +23,7 @@ type Metrics struct {
 }
 
 var (
-	ErrMethodNotSupported = errors.New("access method not supported for metric")
+	ErrIncorrectAccess = errors.New("wrong access method used for metric")
 )
 
 func NewGaugeMetrics(id string) *Metrics {
@@ -52,21 +52,21 @@ func (m *Metrics) Reset() {
 
 func (m Metrics) GetGauge() (*float64, error) {
 	if m.MType != Gauge {
-		return nil, ErrMethodNotSupported
+		return nil, ErrIncorrectAccess
 	}
 	return m.Value, nil
 }
 
 func (m Metrics) GetCounter() (*int64, error) {
 	if m.MType != Counter {
-		return nil, ErrMethodNotSupported
+		return nil, ErrIncorrectAccess
 	}
 	return m.Delta, nil
 }
 
 func (m *Metrics) SetGauge(value float64) error {
 	if m.MType != Gauge {
-		return ErrMethodNotSupported
+		return ErrIncorrectAccess
 	}
 	m.Value = &value
 	m.UpdateHash()
@@ -75,7 +75,7 @@ func (m *Metrics) SetGauge(value float64) error {
 
 func (m *Metrics) AddCounter(delta int64) error {
 	if m.MType != Counter {
-		return ErrMethodNotSupported
+		return ErrIncorrectAccess
 	}
 
 	if m.Delta == nil {

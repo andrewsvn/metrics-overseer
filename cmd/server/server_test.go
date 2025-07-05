@@ -218,12 +218,12 @@ func TestGetValueHandler(t *testing.T) {
 			case model.Counter:
 				exp, _ := strconv.ParseInt(test.want.response, 10, 64)
 				act, err := strconv.ParseInt(string(resBody), 10, 64)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, exp, act)
 			case model.Gauge:
 				exp, _ := strconv.ParseFloat(test.want.response, 64)
 				act, err := strconv.ParseFloat(string(resBody), 64)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, exp, act)
 			default:
 				assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))

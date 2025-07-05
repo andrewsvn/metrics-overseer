@@ -1,21 +1,18 @@
 package main
 
 import (
-	"flag"
+	"log"
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent"
 	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
 )
 
 func main() {
-	cfg := readConfig()
-	agent.NewAgent(cfg).Run()
-}
-
-func readConfig() *agentcfg.Config {
-	cfg := &agentcfg.Config{}
-	cfg.BindFlags()
-
-	flag.Parse()
-	return cfg
+	cfg := agentcfg.ReadFromCLArgs()
+	a, err := agent.NewAgent(cfg)
+	if err != nil {
+		log.Fatalf("Can't initialize agent: %v", err)
+		return
+	}
+	a.Run()
 }

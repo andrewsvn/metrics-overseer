@@ -7,6 +7,7 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCounterAccumulator(t *testing.T) {
@@ -15,10 +16,10 @@ func TestCounterAccumulator(t *testing.T) {
 	assert.Empty(t, cntAcc.Values)
 
 	err := cntAcc.AccumulateCounter(1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = cntAcc.AccumulateGauge(100)
-	assert.ErrorAs(t, err, &model.ErrMethodNotSupported)
+	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
 
 	cntAcc.AccumulateCounter(2)
 	cntAcc.AccumulateCounter(3)
@@ -30,7 +31,7 @@ func TestCounterAccumulator(t *testing.T) {
 		assert.Equal(t, "6", value)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, cntAcc.Delta)
 
 	cntAcc.AccumulateCounter(5)
@@ -42,7 +43,7 @@ func TestCounterAccumulator(t *testing.T) {
 	assert.Equal(t, int64(5), *cntAcc.Delta)
 
 	err = cntAcc.AccumulateCounter(-3)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, int64(2), *cntAcc.Delta)
 }
 
@@ -52,10 +53,10 @@ func TestGaugeAccumulator(t *testing.T) {
 	assert.Empty(t, gaAcc.Values)
 
 	err := gaAcc.AccumulateCounter(1)
-	assert.ErrorAs(t, err, &model.ErrMethodNotSupported)
+	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
 
 	err = gaAcc.AccumulateGauge(1.5)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	gaAcc.AccumulateGauge(3.0)
 	gaAcc.AccumulateGauge(4.5)
@@ -65,18 +66,18 @@ func TestGaugeAccumulator(t *testing.T) {
 		assert.Equal(t, "mem", id)
 		assert.Equal(t, model.Gauge, mtype)
 		fval, err := strconv.ParseFloat(value, 64)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 3.0, fval)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, gaAcc.Values)
 
 	gaAcc.AccumulateGauge(2.0)
 	gaAcc.AccumulateGauge(-2.5)
 	err = gaAcc.ExtractAndSend(func(id, mtype, value string) error {
 		fval, err := strconv.ParseFloat(value, 64)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, -0.25, fval)
 		return fmt.Errorf("sender error")
 	})

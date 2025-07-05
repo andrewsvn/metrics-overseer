@@ -80,19 +80,19 @@ func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
 }
 
 func (mh *MetricsHandlers) processUpdateCounterValue(rw http.ResponseWriter, id string, svalue string) {
-	inc, err := strconv.Atoi(svalue)
+	inc, err := strconv.ParseInt(svalue, 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid metric value", http.StatusBadRequest)
 		return
 	}
 	err = mh.msrv.AccumulateCounter(id, int64(inc))
 	if err != nil {
-		if errors.Is(err, model.ErrMethodNotSupported) {
+		if errors.Is(err, model.ErrIncorrectAccess) {
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
 		log.Printf("[ERROR] unable to update counter value: %v", err)
-		http.Error(rw, "internal error", http.StatusInternalServerError)
+		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -107,12 +107,12 @@ func (mh *MetricsHandlers) processUpdateGaugeValue(rw http.ResponseWriter, id st
 	}
 	err = mh.msrv.SetGauge(id, value)
 	if err != nil {
-		if errors.Is(err, model.ErrMethodNotSupported) {
+		if errors.Is(err, model.ErrIncorrectAccess) {
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
 		log.Printf("[ERROR] unable to update gauge value: %v", err)
-		http.Error(rw, "internal error", http.StatusInternalServerError)
+		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -122,12 +122,12 @@ func (mh *MetricsHandlers) processUpdateGaugeValue(rw http.ResponseWriter, id st
 func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id string) {
 	pval, err := mh.msrv.GetCounter(id)
 	if err != nil {
-		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrMethodNotSupported) {
+		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrIncorrectAccess) {
 			http.Error(rw, "metric not found", http.StatusNotFound)
 			return
 		}
 		log.Printf("[ERROR] unable to get counter value: %v", err)
-		http.Error(rw, "internal error", http.StatusInternalServerError)
+		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -143,12 +143,12 @@ func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id str
 func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id string) {
 	pval, err := mh.msrv.GetGauge(id)
 	if err != nil {
-		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrMethodNotSupported) {
-			http.Error(rw, "metric not found", http.StatusNotFound)
+		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrIncorrectAccess) {
+			http.Error(rw, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
 		}
 		log.Printf("[ERROR] unable to get gauge value: %v", err)
-		http.Error(rw, "internal error", http.StatusInternalServerError)
+		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 

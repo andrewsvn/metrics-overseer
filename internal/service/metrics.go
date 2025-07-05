@@ -1,12 +1,17 @@
 package service
 
 import (
+	_ "embed"
+	"fmt"
 	"html/template"
 	"io"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 )
+
+//go:embed resources/metricspage.html
+var metricspage string
 
 type MetricsService struct {
 	storage        repository.Storage
@@ -41,16 +46,17 @@ func (ms *MetricsService) GetGauge(id string) (*float64, error) {
 
 func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 	if ms.allMetricsTmpl == nil {
-		tmpl, err := template.ParseFiles("resources/html/metricspage.html")
+		tmpl := template.New("metricspage")
+		tmpl, err := tmpl.Parse(metricspage)
 		if err != nil {
-			return err
+			return fmt.Errorf("error parsing page template: %w", err)
 		}
 		ms.allMetricsTmpl = tmpl
 	}
 
 	metrics, err := ms.storage.GetAllSorted()
 	if err != nil {
-		return err
+		return fmt.Errorf("can't get all metrics from storage: %w", err)
 	}
 
 	page := MetricsPage{

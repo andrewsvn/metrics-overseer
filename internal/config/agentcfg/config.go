@@ -3,8 +3,6 @@ package agentcfg
 import (
 	"flag"
 	"fmt"
-	"regexp"
-	"strings"
 )
 
 const (
@@ -13,52 +11,32 @@ const (
 	defaultReportIntervalSec = 10
 )
 
-type enrichedServerAddress string
-
-func (ena *enrichedServerAddress) String() string {
-	if *ena == "" {
-		return defaultServerAddr
-	}
-	return string(*ena)
-}
-
-func (ena *enrichedServerAddress) Set(addr string) error {
-	re := regexp.MustCompile(`^(?:((?:http|https)://)?([^:]+))?(:\d+)$`)
-	parts := re.FindStringSubmatch(addr)
-	if parts == nil {
-		return fmt.Errorf("incorrect network address format")
-	}
-
-	if parts[1] == "" {
-		parts[1] = "http://"
-	}
-	if parts[2] == "" {
-		parts[2] = "localhost"
-	}
-	*ena = enrichedServerAddress(strings.Join(parts[1:], ""))
-	return nil
-}
-
 type Config struct {
-	addr              enrichedServerAddress
-	PollIntervalSec   int64
-	ReportIntervalSec int64
-}
-
-func (cfg Config) ServerAddr() string {
-	return cfg.addr.String()
+	ServerAddr        string
+	PollIntervalSec   int
+	ReportIntervalSec int
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		addr:              "",
+		ServerAddr:        defaultServerAddr,
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,
 	}
 }
 
-func (cfg *Config) BindFlags() {
-	flag.Var(&cfg.addr, "a", fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
-	flag.Int64Var(&cfg.PollIntervalSec, "p", 2, "metrics polling interval, seconds (default: 2)")
-	flag.Int64Var(&cfg.ReportIntervalSec, "r", 10, "metrics reporting interval, seconds (default: 10)")
+func ReadFromCLArgs() *Config {
+	cfg := &Config{}
+	cfg.bindFlags()
+	flag.Parse()
+	return cfg
+}
+
+func (cfg *Config) bindFlags() {
+	flag.StringVar(&cfg.ServerAddr, "a", defaultServerAddr,
+		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
+	flag.IntVar(&cfg.PollIntervalSec, "p", defaultPollIntervalSec,
+		fmt.Sprintf("metrics polling interval, seconds (default: %d)", defaultPollIntervalSec))
+	flag.IntVar(&cfg.ReportIntervalSec, "r", defaultReportIntervalSec,
+		fmt.Sprintf("metrics reporting interval, seconds (default: %d)", defaultReportIntervalSec))
 }

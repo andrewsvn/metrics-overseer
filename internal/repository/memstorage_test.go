@@ -5,6 +5,7 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMemStorageCounters(t *testing.T) {
@@ -32,10 +33,10 @@ func TestMemStorageCounters(t *testing.T) {
 	assert.Equal(t, int64(-2), *cnt2)
 
 	_, err = ms.GetGauge("cnt1")
-	assert.ErrorAs(t, err, &model.ErrMethodNotSupported)
+	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
 
 	err = ms.ResetAll()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	cnt1, _ = ms.GetCounter("cnt1")
 	assert.Nil(t, cnt1)
 }
@@ -63,7 +64,7 @@ func TestMemStorageGauges(t *testing.T) {
 	assert.Equal(t, -2.22, *g2)
 
 	_, err = ms.GetCounter("gauge1")
-	assert.ErrorAs(t, err, &model.ErrMethodNotSupported)
+	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
 }
 
 func TestMemStorageGetAll(t *testing.T) {
@@ -75,7 +76,7 @@ func TestMemStorageGetAll(t *testing.T) {
 	ms.AddCounter("2cnt2", 2)
 
 	metrics, err := ms.GetAllSorted()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 4, len(metrics))
 	assert.Equal(t, "1cnt1", metrics[0].ID)
 	assert.Equal(t, "1gauge1", metrics[1].ID)
@@ -86,7 +87,7 @@ func TestMemStorageGetAll(t *testing.T) {
 	ms.AddCounter("2cnt2", -2)
 
 	metrics, err = ms.GetAllSorted()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 6, len(metrics))
 	assert.Equal(t, "0cnt0", metrics[0].ID)
 	assert.Equal(t, "0gauge0", metrics[1].ID)

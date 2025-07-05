@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"net/http"
 
@@ -16,7 +15,7 @@ func main() {
 }
 
 func run() error {
-	cfg := readConfig()
+	cfg := servercfg.ReadFromCLArgs()
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
@@ -26,12 +25,4 @@ func run() error {
 
 	log.Printf("Starting server on %s\n", cfg.Addr)
 	return http.ListenAndServe(cfg.Addr, r)
-}
-
-func readConfig() *servercfg.Config {
-	cfg := &servercfg.Config{}
-	cfg.BindFlags()
-
-	flag.Parse()
-	return cfg
 }
