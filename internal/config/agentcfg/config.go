@@ -3,6 +3,7 @@ package agentcfg
 import (
 	"flag"
 	"fmt"
+	"github.com/caarlos0/env/v6"
 )
 
 const (
@@ -12,23 +13,16 @@ const (
 )
 
 type Config struct {
-	ServerAddr        string
-	PollIntervalSec   int
-	ReportIntervalSec int
+	ServerAddr        string `env:"ADDRESS"`
+	PollIntervalSec   int    `env:"POLL_INTERVAL"`
+	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
 }
 
-func DefaultConfig() *Config {
-	return &Config{
-		ServerAddr:        defaultServerAddr,
-		PollIntervalSec:   defaultPollIntervalSec,
-		ReportIntervalSec: defaultReportIntervalSec,
-	}
-}
-
-func ReadFromCLArgs() *Config {
+func Read() *Config {
 	cfg := &Config{}
 	cfg.bindFlags()
 	flag.Parse()
+	_ = env.Parse(cfg)
 	return cfg
 }
 

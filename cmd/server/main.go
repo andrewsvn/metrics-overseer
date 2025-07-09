@@ -15,7 +15,7 @@ func main() {
 }
 
 func run() error {
-	cfg := servercfg.ReadFromCLArgs()
+	cfg := servercfg.Read()
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)

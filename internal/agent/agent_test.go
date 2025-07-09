@@ -11,22 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type TestSender struct {
+type testSender struct {
 	t          *testing.T
 	callTotal  int
 	cntCalls   map[string]int64
 	gaugeCalls map[string]float64
 }
 
-func NewTestSender(t *testing.T) *TestSender {
-	return &TestSender{
+func newTestSender(t *testing.T) *testSender {
+	return &testSender{
 		t:          t,
 		cntCalls:   make(map[string]int64),
 		gaugeCalls: make(map[string]float64),
 	}
 }
 
-func (ts *TestSender) MetricSendFunc() sender.MetricSendFunc {
+func (ts *testSender) MetricSendFunc() sender.MetricSendFunc {
 	return func(id, mtype, value string) error {
 		ts.callTotal += 1
 		switch mtype {
@@ -46,7 +46,7 @@ func (ts *TestSender) MetricSendFunc() sender.MetricSendFunc {
 }
 
 func TestAgentAccumulators(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	a, err := NewAgent(agentcfg.Read())
 	require.NoError(t, err)
 
 	assert.Empty(t, a.accums)
@@ -64,7 +64,7 @@ func TestAgentAccumulators(t *testing.T) {
 }
 
 func TestAgentPolling(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	a, err := NewAgent(agentcfg.Read())
 	require.NoError(t, err)
 
 	a.execPoll()
@@ -76,7 +76,7 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	a, err := NewAgent(agentcfg.Read())
 	require.NoError(t, err)
 
 	a.storeCounterMetric("cnt1", 1)
@@ -89,7 +89,7 @@ func TestAgentReporting(t *testing.T) {
 	a.storeGaugeMetric("gauge1", 1.75)
 	a.storeGaugeMetric("gauge2", 3.14)
 
-	ts := NewTestSender(t)
+	ts := newTestSender(t)
 	a.sndr = ts
 	a.execReport()
 
