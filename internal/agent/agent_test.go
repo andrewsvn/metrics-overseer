@@ -46,7 +46,7 @@ func (ts *testSender) MetricSendFunc() sender.MetricSendFunc {
 }
 
 func TestAgentAccumulators(t *testing.T) {
-	a, err := NewAgent(agentcfg.Read())
+	a, err := NewAgent(agentcfg.Default())
 	require.NoError(t, err)
 
 	assert.Empty(t, a.accums)
@@ -64,7 +64,7 @@ func TestAgentAccumulators(t *testing.T) {
 }
 
 func TestAgentPolling(t *testing.T) {
-	a, err := NewAgent(agentcfg.Read())
+	a, err := NewAgent(agentcfg.Default())
 	require.NoError(t, err)
 
 	a.execPoll()
@@ -76,7 +76,7 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	a, err := NewAgent(agentcfg.Read())
+	a, err := NewAgent(agentcfg.Default())
 	require.NoError(t, err)
 
 	a.storeCounterMetric("cnt1", 1)

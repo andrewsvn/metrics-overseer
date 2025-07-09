@@ -26,6 +26,15 @@ func Read() *Config {
 	return cfg
 }
 
+func Default() *Config {
+	cfg := &Config{
+		ServerAddr:        defaultServerAddr,
+		PollIntervalSec:   defaultPollIntervalSec,
+		ReportIntervalSec: defaultReportIntervalSec,
+	}
+	return cfg
+}
+
 func (cfg *Config) bindFlags() {
 	flag.StringVar(&cfg.ServerAddr, "a", defaultServerAddr,
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
