@@ -41,9 +41,7 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 		if err != nil {
 			return fmt.Errorf("error sending request to server %s: %w", rs.addr, err)
 		}
-		defer func(Body io.ReadCloser) {
-			_ = Body.Close()
-		}(resp.Body)
+		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
