@@ -10,7 +10,7 @@ import (
 type RestSender struct {
 	addr string
 
-	// we use custom http client here for further customization
+	// we use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
 }
@@ -41,7 +41,9 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 		if err != nil {
 			return fmt.Errorf("error sending request to server %s: %w", rs.addr, err)
 		}
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(resp.Body)
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
