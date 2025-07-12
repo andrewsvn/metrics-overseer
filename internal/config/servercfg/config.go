@@ -3,6 +3,7 @@ package servercfg
 import (
 	"flag"
 	"fmt"
+	"github.com/caarlos0/env/v6"
 )
 
 const (
@@ -10,22 +11,18 @@ const (
 )
 
 type Config struct {
-	Addr string
+	Addr string `env:"ADDRESS"`
 }
 
-func DefaultConfig() *Config {
-	return &Config{
-		Addr: defaultAddr,
-	}
-}
-
-func ReadFromCLArgs() *Config {
+func Read() *Config {
 	cfg := &Config{}
 	cfg.bindFlags()
 	flag.Parse()
+	_ = env.Parse(cfg)
 	return cfg
 }
 
 func (cfg *Config) bindFlags() {
-	flag.StringVar(&cfg.Addr, "a", defaultAddr, fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
+	flag.StringVar(&cfg.Addr, "a", defaultAddr,
+		fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
 }

@@ -10,7 +10,7 @@ import (
 type RestSender struct {
 	addr string
 
-	// we use custom http client here for further customization
+	// we use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
 }

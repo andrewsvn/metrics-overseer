@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"log"
 	"net/http"
 	"strconv"
@@ -14,16 +15,24 @@ import (
 
 type MetricsHandlers struct {
 	msrv *service.MetricsService
+	lg   *middleware.Loggable
 }
 
 func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
+	lg, err := middleware.NewLoggable("INFO", "metrics-handler")
+	if err != nil {
+		panic(err)
+	}
+
 	return &MetricsHandlers{
 		msrv: ms,
+		lg:   lg,
 	}
 }
 
 func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(mh.lg.Middleware)
 	r.Post("/update/{mtype}/{id}/{value}", mh.UpdateHandler())
 	r.Get("/value/{mtype}/{id}", mh.GetValueHandler())
 	r.Get("/", mh.ShowMetricsPage())
@@ -134,9 +143,9 @@ func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id str
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
 	if pval == nil {
-		rw.Write([]byte("nil"))
+		_, _ = rw.Write([]byte("nil"))
 	} else {
-		rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+		_, _ = rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
 	}
 }
 
@@ -155,8 +164,8 @@ func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id strin
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
 	if pval == nil {
-		rw.Write([]byte("nil"))
+		_, _ = rw.Write([]byte("nil"))
 	} else {
-		rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
+		_, _ = rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
 	}
 }

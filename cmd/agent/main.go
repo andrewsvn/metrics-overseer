@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	cfg := agentcfg.ReadFromCLArgs()
+	cfg := agentcfg.Read()
 	a, err := agent.NewAgent(cfg)
 	if err != nil {
 		log.Fatalf("Can't initialize agent: %v", err)
