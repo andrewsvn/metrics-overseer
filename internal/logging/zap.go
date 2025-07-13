@@ -3,6 +3,7 @@ package logging
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func NewZapLogger(logLevel string) (*zap.Logger, error) {
@@ -12,6 +13,8 @@ func NewZapLogger(logLevel string) (*zap.Logger, error) {
 	}
 
 	lcfg := zap.NewProductionConfig()
+	lcfg.DisableCaller = true
+	lcfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	lcfg.Level = lvl
 
 	logger, err := lcfg.Build()
