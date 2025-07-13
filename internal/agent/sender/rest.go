@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -15,7 +14,7 @@ type RestSender struct {
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
 
-	l *zap.Logger
+	logger *zap.Logger
 }
 
 func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
@@ -24,11 +23,11 @@ func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
 		return nil, fmt.Errorf("can't enrich address for sender to a proper format: %w", err)
 	}
 
-	log.Printf("[INFO] Server address for sending reports: %s", enrichedAddr)
+	logger.Info(fmt.Sprintf("Sender address for sending reports: %s", enrichedAddr))
 	rs := &RestSender{
-		addr: enrichedAddr,
-		cl:   &http.Client{},
-		l:    logger,
+		addr:   enrichedAddr,
+		cl:     &http.Client{},
+		logger: logger,
 	}
 	return rs, nil
 }
@@ -48,7 +47,7 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 		defer func() {
 			err := resp.Body.Close()
 			if err != nil {
-				rs.l.Error("error closing response body", zap.Error(err))
+				rs.logger.Error("error closing response body", zap.Error(err))
 			}
 		}()
 
