@@ -3,7 +3,7 @@ package handler
 import (
 	"errors"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
-	"log"
+	"go.uber.org/zap"
 	"net/http"
 	"strconv"
 
@@ -14,25 +14,23 @@ import (
 )
 
 type MetricsHandlers struct {
-	msrv *service.MetricsService
-	lg   *middleware.Loggable
+	msrv   *service.MetricsService
+	logger *zap.Logger
 }
 
-func NewMetricsHandlers(ms *service.MetricsService) *MetricsHandlers {
-	lg, err := middleware.NewLoggable("INFO", "metrics-handler")
-	if err != nil {
-		panic(err)
-	}
-
+func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *MetricsHandlers {
 	return &MetricsHandlers{
-		msrv: ms,
-		lg:   lg,
+		msrv:   ms,
+		logger: logger,
 	}
 }
 
 func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(mh.lg.Middleware)
+
+	lg := middleware.NewLoggable(mh.logger)
+	r.Use(lg.Middleware)
+
 	r.Post("/update/{mtype}/{id}/{value}", mh.UpdateHandler())
 	r.Get("/value/{mtype}/{id}", mh.GetValueHandler())
 	r.Get("/", mh.ShowMetricsPage())
@@ -45,7 +43,8 @@ func (mh *MetricsHandlers) UpdateHandler() http.HandlerFunc {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
 		svalue := chi.URLParam(r, "value")
-		log.Printf("Updating metric of type %s: id=%s, value=%s", mtype, id, svalue)
+		mh.logger.Info("Updating metric",
+			zap.String("mtype", mtype), zap.String("id", id), zap.String("value", svalue))
 
 		switch mtype {
 		case model.Counter:
@@ -62,7 +61,7 @@ func (mh *MetricsHandlers) GetValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
-		log.Printf("Fetching metric value of type %s: id=%s", mtype, id)
+		mh.logger.Info("Fetching metric", zap.String("mtype", mtype), zap.String("id", id))
 
 		switch mtype {
 		case model.Counter:
@@ -79,7 +78,7 @@ func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		err := mh.msrv.GenerateAllMetricsHTML(rw)
 		if err != nil {
-			log.Printf("[ERROR] unable to render metrics page: %v", err)
+			mh.logger.Error("Error generating metrics html", zap.Error(err))
 			http.Error(rw, "unable to render metrics page", http.StatusInternalServerError)
 			return
 		}
@@ -94,13 +93,13 @@ func (mh *MetricsHandlers) processUpdateCounterValue(rw http.ResponseWriter, id 
 		http.Error(rw, "invalid metric value", http.StatusBadRequest)
 		return
 	}
-	err = mh.msrv.AccumulateCounter(id, int64(inc))
+	err = mh.msrv.AccumulateCounter(id, inc)
 	if err != nil {
 		if errors.Is(err, model.ErrIncorrectAccess) {
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
-		log.Printf("[ERROR] unable to update counter value: %v", err)
+		mh.logger.Error("Error updating counter metric", zap.Error(err))
 		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -120,7 +119,7 @@ func (mh *MetricsHandlers) processUpdateGaugeValue(rw http.ResponseWriter, id st
 			http.Error(rw, "wrong metric type", http.StatusBadRequest)
 			return
 		}
-		log.Printf("[ERROR] unable to update gauge value: %v", err)
+		mh.logger.Error("Error updating gauge metric", zap.Error(err))
 		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -135,7 +134,7 @@ func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id str
 			http.Error(rw, "metric not found", http.StatusNotFound)
 			return
 		}
-		log.Printf("[ERROR] unable to get counter value: %v", err)
+		mh.logger.Error("Error getting counter metric", zap.Error(err))
 		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -143,9 +142,15 @@ func (mh *MetricsHandlers) processGetCounterValue(rw http.ResponseWriter, id str
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
 	if pval == nil {
-		_, _ = rw.Write([]byte("nil"))
+		_, err = rw.Write([]byte("nil"))
+		if err != nil {
+			mh.logger.Error("Error writing response body", zap.Error(err))
+		}
 	} else {
-		_, _ = rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+		_, err = rw.Write(strconv.AppendInt(make([]byte, 0), *pval, 10))
+		if err != nil {
+			mh.logger.Error("Error writing response body", zap.Error(err))
+		}
 	}
 }
 
@@ -156,7 +161,7 @@ func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id strin
 			http.Error(rw, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
 		}
-		log.Printf("[ERROR] unable to get gauge value: %v", err)
+		mh.logger.Error("Error getting gauge metric", zap.Error(err))
 		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -164,8 +169,14 @@ func (mh *MetricsHandlers) processGetGaugeValue(rw http.ResponseWriter, id strin
 	rw.Header().Add("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
 	if pval == nil {
-		_, _ = rw.Write([]byte("nil"))
+		_, err = rw.Write([]byte("nil"))
+		if err != nil {
+			mh.logger.Error("Error writing response body", zap.Error(err))
+		}
 	} else {
-		_, _ = rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
+		_, err = rw.Write(strconv.AppendFloat(make([]byte, 0), *pval, 'f', -1, 64))
+		if err != nil {
+			mh.logger.Error("Error writing response body", zap.Error(err))
+		}
 	}
 }

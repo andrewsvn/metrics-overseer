@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"go.uber.org/zap"
 	"net/http"
 	"time"
@@ -9,27 +8,12 @@ import (
 
 type Loggable struct {
 	logger *zap.Logger
-	prefix string
 }
 
-func NewLoggable(level, prefix string) (*Loggable, error) {
-	lvl, err := zap.ParseAtomicLevel(level)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing log level: %w", err)
-	}
-
-	lcfg := zap.NewProductionConfig()
-	lcfg.Level = lvl
-
-	logger, err := lcfg.Build()
-	if err != nil {
-		return nil, fmt.Errorf("error creating logger: %w", err)
-	}
-
+func NewLoggable(logger *zap.Logger) *Loggable {
 	return &Loggable{
 		logger: logger,
-		prefix: prefix,
-	}, nil
+	}
 }
 
 type enrichedResponseWriter struct {
@@ -62,7 +46,7 @@ func (l *Loggable) Middleware(next http.Handler) http.Handler {
 		}(l.logger)
 
 		sl := l.logger.Sugar()
-		sl.Infow(fmt.Sprintf("[%s] Request received", l.prefix),
+		sl.Infow("Request received",
 			"url", r.URL.String(),
 			"method", r.Method)
 
@@ -71,7 +55,7 @@ func (l *Loggable) Middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(ew, r)
 		duration := time.Since(start)
 
-		sl.Infow(fmt.Sprintf("[%s] Request processed", l.prefix),
+		sl.Infow("Request processed",
 			"url", r.URL.String(),
 			"method", r.Method,
 			"status", ew.Status,

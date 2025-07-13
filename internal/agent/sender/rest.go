@@ -2,6 +2,7 @@ package sender
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"net/http"
@@ -13,9 +14,11 @@ type RestSender struct {
 	// we use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
+
+	l *zap.Logger
 }
 
-func NewRestSender(addr string) (*RestSender, error) {
+func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
 	enrichedAddr, err := enrichServerAddress(addr)
 	if err != nil {
 		return nil, fmt.Errorf("can't enrich address for sender to a proper format: %w", err)
@@ -25,6 +28,7 @@ func NewRestSender(addr string) (*RestSender, error) {
 	rs := &RestSender{
 		addr: enrichedAddr,
 		cl:   &http.Client{},
+		l:    logger,
 	}
 	return rs, nil
 }
@@ -41,7 +45,12 @@ func (rs RestSender) MetricSendFunc() MetricSendFunc {
 		if err != nil {
 			return fmt.Errorf("error sending request to server %s: %w", rs.addr, err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			err := resp.Body.Close()
+			if err != nil {
+				rs.l.Error("error closing response body", zap.Error(err))
+			}
+		}()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {

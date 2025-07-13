@@ -10,12 +10,14 @@ const (
 	defaultServerAddr        = "http://localhost:8080"
 	defaultPollIntervalSec   = 2
 	defaultReportIntervalSec = 10
+	defaultLogLevel          = "info"
 )
 
 type Config struct {
 	ServerAddr        string `env:"ADDRESS"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
+	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
 func Read() *Config {
@@ -31,6 +33,7 @@ func Default() *Config {
 		ServerAddr:        defaultServerAddr,
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,
+		LogLevel:          defaultLogLevel,
 	}
 	return cfg
 }

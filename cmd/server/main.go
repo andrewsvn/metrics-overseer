@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"log"
 	"net/http"
 
@@ -16,13 +18,17 @@ func main() {
 
 func run() error {
 	cfg := servercfg.Read()
+	logger, err := logging.NewZapLogger(cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("can't initialize logger: %w", err)
+	}
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
-	mhandlers := handler.NewMetricsHandlers(msrv)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 
 	r := mhandlers.GetRouter()
 
-	log.Printf("Starting server on %s\n", cfg.Addr)
+	logger.Info(fmt.Sprintf("Starting server on %s\n", cfg.Addr))
 	return http.ListenAndServe(cfg.Addr, r)
 }

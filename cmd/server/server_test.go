@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -241,7 +242,9 @@ func TestGetAllMetricsPage(t *testing.T) {
 
 	res, err := srv.Client().Do(req)
 	require.NoError(t, err)
-	defer res.Body.Close()
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.Equal(t, "text/html", strings.Split(res.Header.Get("Content-Type"), ";")[0])
@@ -253,11 +256,13 @@ func TestGetAllMetricsPage(t *testing.T) {
 }
 
 func setupServer() *httptest.Server {
+	logger, _ := logging.NewZapLogger("info")
+
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
-	msrv.AccumulateCounter("cnt1", 10)
-	msrv.SetGauge("gauge1", 3.14)
-	mhandlers := handler.NewMetricsHandlers(msrv)
+	_ = msrv.AccumulateCounter("cnt1", 10)
+	_ = msrv.SetGauge("gauge1", 3.14)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }

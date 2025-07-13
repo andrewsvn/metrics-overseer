@@ -11,7 +11,8 @@ const (
 )
 
 type Config struct {
-	Addr string `env:"ADDRESS"`
+	Addr     string `env:"ADDRESS"`
+	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
 }
 
 func Read() *Config {

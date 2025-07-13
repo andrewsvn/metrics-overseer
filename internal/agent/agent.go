@@ -2,7 +2,8 @@ package agent
 
 import (
 	"fmt"
-	"log"
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"go.uber.org/zap"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -22,15 +23,22 @@ type Agent struct {
 
 	accums map[string]*metrics.MetricAccumulator
 	sndr   sender.MetricSender
+	logger *zap.Logger
 }
 
 func NewAgent(cfg *agentcfg.Config) (*Agent, error) {
-	sndr, err := sender.NewRestSender(cfg.ServerAddr)
+	logger, err := logging.NewZapLogger(cfg.LogLevel)
+	if err != nil {
+		return nil, fmt.Errorf("can't initialize logger: %w", err)
+	}
+
+	sndr, err := sender.NewRestSender(cfg.ServerAddr, logger)
 	if err != nil {
 		return nil, fmt.Errorf("can't construct agent from config: %w", err)
 	}
 
-	log.Printf("[INFO] Agent poll interval = %d s, report interval = %d s", cfg.PollIntervalSec, cfg.ReportIntervalSec)
+	logger.Info(fmt.Sprintf("Agent poll interval = %d s, report interval = %d s",
+		cfg.PollIntervalSec, cfg.ReportIntervalSec))
 
 	a := &Agent{
 		pollInterval:   time.Duration(cfg.PollIntervalSec) * time.Second,
@@ -38,12 +46,13 @@ func NewAgent(cfg *agentcfg.Config) (*Agent, error) {
 
 		accums: make(map[string]*metrics.MetricAccumulator),
 		sndr:   sndr,
+		logger: logger,
 	}
 	return a, nil
 }
 
 func (a *Agent) Run() {
-	log.Printf("[INFO] Starting metrics-overseer agent")
+	a.logger.Info("Starting metrics-overseer agent")
 
 	pollTicker := time.NewTicker(a.pollInterval)
 	reportTicker := time.NewTicker(a.reportInterval)
@@ -55,11 +64,10 @@ func (a *Agent) Run() {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 
-	log.Printf("[INFO] Shutdown of metrics-overseer agent")
+	a.logger.Info("Shutting down metrics-overseer agent")
 }
 
 func (a *Agent) poll(tc <-chan time.Time) {
-
 	for {
 		<-tc
 		a.execPoll()
@@ -67,7 +75,7 @@ func (a *Agent) poll(tc <-chan time.Time) {
 }
 
 func (a *Agent) execPoll() {
-	log.Printf("[INFO] Polling metrics")
+	a.logger.Info("Polling metrics")
 
 	ms := runtime.MemStats{}
 	runtime.ReadMemStats(&ms)
@@ -112,11 +120,11 @@ func (a *Agent) report(tc <-chan time.Time) {
 }
 
 func (a *Agent) execReport() {
-	log.Printf("[INFO] Reporting metrics to server")
+	a.logger.Info("Reporting metrics to server")
 	for name, ma := range a.accums {
 		err := ma.ExtractAndSend(a.sndr.MetricSendFunc())
 		if err != nil {
-			log.Printf("[ERROR] unable to send metric %s to server", name)
+			a.logger.Error(fmt.Sprintf("unable to send metric %s to server", name))
 		}
 	}
 }
@@ -129,7 +137,7 @@ func (a *Agent) storeCounterMetric(id string, delta int64) {
 	}
 	err := ma.AccumulateCounter(delta)
 	if err != nil {
-		log.Printf("[ERROR] failed to store metric '%s', reason: %v", id, err)
+		a.logger.Error(fmt.Sprintf("failed to store metric '%s', reason: %v", id, err))
 	}
 }
 
@@ -141,6 +149,6 @@ func (a *Agent) storeGaugeMetric(id string, value float64) {
 	}
 	err := ma.AccumulateGauge(value)
 	if err != nil {
-		log.Printf("[ERROR] failed to store metric '%s', reason: %v", id, err)
+		a.logger.Error(fmt.Sprintf("failed to store metric '%s', reason: %v", id, err))
 	}
 }
