@@ -42,20 +42,20 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	lg := middleware.NewLoggable(mh.logger)
 	r.Use(lg.Middleware)
 
-	r.Post("/update/{mtype}/{id}/{value}", mh.UpdateByPathHandler())
+	r.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", mh.UpdateByBodyHandler())
+		r.Post("/", mh.updateByBodyHandler())
 	})
 	r.Route("/value", func(r chi.Router) {
-		r.Post("/", mh.GetJSONValueHandler())
+		r.Post("/", mh.getJSONValueHandler())
 	})
-	r.Get("/value/{mtype}/{id}", mh.GetPlainValueHandler())
-	r.Get("/", mh.ShowMetricsPage())
+	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
+	r.Get("/", mh.showMetricsPage())
 
 	return r
 }
 
-func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
+func (mh *MetricsHandlers) showMetricsPage() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Add("Content-Type", "text/html")
 		rw.WriteHeader(http.StatusOK)
@@ -69,7 +69,7 @@ func (mh *MetricsHandlers) ShowMetricsPage() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) UpdateByPathHandler() http.HandlerFunc {
+func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
@@ -92,7 +92,7 @@ func (mh *MetricsHandlers) UpdateByPathHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) UpdateByBodyHandler() http.HandlerFunc {
+func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		defer func() {
 			err := r.Body.Close()
@@ -123,7 +123,7 @@ func (mh *MetricsHandlers) UpdateByBodyHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) GetPlainValueHandler() http.HandlerFunc {
+func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
@@ -138,7 +138,7 @@ func (mh *MetricsHandlers) GetPlainValueHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) GetJSONValueHandler() http.HandlerFunc {
+func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		metric := &model.Metrics{}
 		if err := json.NewDecoder(r.Body).Decode(metric); err != nil {
