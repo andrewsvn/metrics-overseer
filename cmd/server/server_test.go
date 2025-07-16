@@ -19,22 +19,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUpdateHandler(t *testing.T) {
-	type want struct {
-		code     int
-		response string
-	}
-	tests := []struct {
-		name   string
-		method string
-		url    string
-		want   want
-	}{
+type testWant struct {
+	code        int
+	response    string
+	contentType string
+	resultType  string
+}
+
+type testCase struct {
+	name   string
+	method string
+	url    string
+	body   string
+	want   testWant
+}
+
+func TestUpdateByPathHandler(t *testing.T) {
+	tests := []testCase{
 		{
 			name:   "counter_metric",
 			method: http.MethodPost,
 			url:    "/update/counter/cnt1/10",
-			want: want{
+			want: testWant{
 				code: http.StatusOK,
 			},
 		},
@@ -42,7 +48,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "gauge_metric",
 			method: http.MethodPost,
 			url:    "/update/gauge/gauge1/1.05",
-			want: want{
+			want: testWant{
 				code: http.StatusOK,
 			},
 		},
@@ -50,7 +56,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "wrong_http_method",
 			method: http.MethodPut,
 			url:    "/update/counter/gauge1/1.05",
-			want: want{
+			want: testWant{
 				code: http.StatusMethodNotAllowed,
 			},
 		},
@@ -58,7 +64,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "wrong_metric_type",
 			method: http.MethodPost,
 			url:    "/update/value/val1/100",
-			want: want{
+			want: testWant{
 				code:     http.StatusBadRequest,
 				response: "unsupported metric type",
 			},
@@ -67,7 +73,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "missing_metric_value",
 			method: http.MethodPost,
 			url:    "/update/counter/cnt1",
-			want: want{
+			want: testWant{
 				code: http.StatusNotFound,
 			},
 		},
@@ -75,7 +81,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "wrong_counter_metric_value",
 			method: http.MethodPost,
 			url:    "/update/counter/cnt1/10e",
-			want: want{
+			want: testWant{
 				code:     http.StatusBadRequest,
 				response: "invalid metric value",
 			},
@@ -84,7 +90,7 @@ func TestUpdateHandler(t *testing.T) {
 			name:   "wrong_gauge_metric_value",
 			method: http.MethodPost,
 			url:    "/update/gauge/gauge1/0x01",
-			want: want{
+			want: testWant{
 				code:     http.StatusBadRequest,
 				response: "invalid metric value",
 			},
@@ -95,20 +101,26 @@ func TestUpdateHandler(t *testing.T) {
 	defer srv.Close()
 
 	for _, test := range tests {
-		req, err := http.NewRequest(test.method, srv.URL+test.url, nil)
-		require.NoError(t, err)
+		updateByPathHandlerSingleTest(t, test, srv)
+	}
+}
 
-		res, err := srv.Client().Do(req)
-		require.NoError(t, err)
-		defer res.Body.Close()
+func updateByPathHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Server) {
+	req, err := http.NewRequest(test.method, srv.URL+test.url, nil)
+	require.NoError(t, err)
 
-		assert.Equal(t, test.want.code, res.StatusCode)
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
-		resBody, err := io.ReadAll(res.Body)
-		require.NoError(t, err)
-		if test.want.response != "" {
-			assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
-		}
+	assert.Equal(t, test.want.code, res.StatusCode)
+
+	resBody, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	if test.want.response != "" {
+		assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
 	}
 }
 
@@ -194,24 +206,13 @@ func updateByJSONHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Se
 	}
 }
 
-func TestGetValueHandler(t *testing.T) {
-	type want struct {
-		code        int
-		response    string
-		contentType string
-		resultType  string
-	}
-	tests := []struct {
-		name   string
-		method string
-		url    string
-		want   want
-	}{
+func TestGetPlainValueHandler(t *testing.T) {
+	tests := []testCase{
 		{
 			name:   "get_existing_counter",
 			method: http.MethodGet,
 			url:    "/value/counter/cnt1",
-			want: want{
+			want: testWant{
 				code:        http.StatusOK,
 				response:    "10",
 				contentType: "text/plain",
@@ -222,7 +223,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_existing_gauge",
 			method: http.MethodGet,
 			url:    "/value/gauge/gauge1",
-			want: want{
+			want: testWant{
 				code:        http.StatusOK,
 				response:    "3.14",
 				contentType: "text/plain",
@@ -233,7 +234,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_nonexisting_counter",
 			method: http.MethodGet,
 			url:    "/value/counter/cnt10",
-			want: want{
+			want: testWant{
 				code: http.StatusNotFound,
 			},
 		},
@@ -241,7 +242,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_nonexisting_gauge",
 			method: http.MethodGet,
 			url:    "/value/gauge/gauge10",
-			want: want{
+			want: testWant{
 				code: http.StatusNotFound,
 			},
 		},
@@ -249,7 +250,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_gauge_as_counter",
 			method: http.MethodGet,
 			url:    "/value/counter/gauge1",
-			want: want{
+			want: testWant{
 				code: http.StatusNotFound,
 			},
 		},
@@ -257,7 +258,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_counter_as_gauge",
 			method: http.MethodGet,
 			url:    "/value/gauge/cnt1",
-			want: want{
+			want: testWant{
 				code: http.StatusNotFound,
 			},
 		},
@@ -265,7 +266,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_counter_wrong_method",
 			method: http.MethodPost,
 			url:    "/value/counter/cnt1",
-			want: want{
+			want: testWant{
 				code: http.StatusMethodNotAllowed,
 			},
 		},
@@ -273,7 +274,7 @@ func TestGetValueHandler(t *testing.T) {
 			name:   "get_unknown_metric_type",
 			method: http.MethodGet,
 			url:    "/value/string/str1",
-			want: want{
+			want: testWant{
 				code: http.StatusBadRequest,
 			},
 		},
@@ -283,35 +284,41 @@ func TestGetValueHandler(t *testing.T) {
 	defer srv.Close()
 
 	for _, test := range tests {
-		req, err := http.NewRequest(test.method, srv.URL+test.url, nil)
-		require.NoError(t, err)
+		getPlainValueHandlerSingleTest(t, test, srv)
+	}
+}
 
-		res, err := srv.Client().Do(req)
-		require.NoError(t, err)
-		defer res.Body.Close()
+func getPlainValueHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Server) {
+	req, err := http.NewRequest(test.method, srv.URL+test.url, nil)
+	require.NoError(t, err)
 
-		assert.Equal(t, test.want.code, res.StatusCode)
-		if test.want.contentType != "" {
-			assert.Equal(t, test.want.contentType, strings.Split(res.Header.Get("Content-Type"), ";")[0])
-		}
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
-		resBody, err := io.ReadAll(res.Body)
-		require.NoError(t, err)
-		if test.want.response != "" {
-			switch test.want.resultType {
-			case model.Counter:
-				exp, _ := strconv.ParseInt(test.want.response, 10, 64)
-				act, err := strconv.ParseInt(string(resBody), 10, 64)
-				require.NoError(t, err)
-				assert.Equal(t, exp, act)
-			case model.Gauge:
-				exp, _ := strconv.ParseFloat(test.want.response, 64)
-				act, err := strconv.ParseFloat(string(resBody), 64)
-				require.NoError(t, err)
-				assert.Equal(t, exp, act)
-			default:
-				assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
-			}
+	assert.Equal(t, test.want.code, res.StatusCode)
+	if test.want.contentType != "" {
+		assert.Equal(t, test.want.contentType, strings.Split(res.Header.Get("Content-Type"), ";")[0])
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	if test.want.response != "" {
+		switch test.want.resultType {
+		case model.Counter:
+			exp, _ := strconv.ParseInt(test.want.response, 10, 64)
+			act, err := strconv.ParseInt(string(resBody), 10, 64)
+			require.NoError(t, err)
+			assert.Equal(t, exp, act)
+		case model.Gauge:
+			exp, _ := strconv.ParseFloat(test.want.response, 64)
+			act, err := strconv.ParseFloat(string(resBody), 64)
+			require.NoError(t, err)
+			assert.Equal(t, exp, act)
+		default:
+			assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
 		}
 	}
 }
@@ -436,8 +443,10 @@ func TestGetAllMetricsPage(t *testing.T) {
 
 	resBody, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
-	assert.Regexp(t, regexp.MustCompile(`(?s)<html>.*<body>.*<tr>.*<td>cnt1</td>\s*<td>counter</td>\s*<td>10</td>`), string(resBody))
-	assert.Regexp(t, regexp.MustCompile(`(?s)<tr>.*<td>gauge1</td>\s*<td>gauge</td>\s*<td>3.14</td>`), string(resBody))
+	assert.Regexp(t, regexp.MustCompile(`(?s)<html>.*<body>.*<tr>.*<td>cnt1</td>\s*<td>counter</td>\s*<td>10</td>`),
+		string(resBody))
+	assert.Regexp(t, regexp.MustCompile(`(?s)<tr>.*<td>gauge1</td>\s*<td>gauge</td>\s*<td>3.14</td>`),
+		string(resBody))
 }
 
 func setupServer() *httptest.Server {
