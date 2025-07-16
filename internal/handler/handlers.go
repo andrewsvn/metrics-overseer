@@ -43,10 +43,12 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r.Use(lg.Middleware)
 
 	r.Post("/update/{mtype}/{id}/{value}", mh.UpdateByPathHandler())
-	r.Post("/update", mh.UpdateByBodyHandler())
-	r.Post("/update/", mh.UpdateByBodyHandler())
-	r.Post("/value", mh.GetJSONValueHandler())
-	r.Post("/value/", mh.GetJSONValueHandler())
+	r.Route("/update", func(r chi.Router) {
+		r.Post("/", mh.UpdateByBodyHandler())
+	})
+	r.Route("/value", func(r chi.Router) {
+		r.Post("/", mh.GetJSONValueHandler())
+	})
 	r.Get("/value/{mtype}/{id}", mh.GetPlainValueHandler())
 	r.Get("/", mh.ShowMetricsPage())
 
