@@ -5,6 +5,7 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
@@ -29,6 +30,7 @@ func run() error {
 
 	r := mhandlers.GetRouter()
 
-	logger.Info(fmt.Sprintf("Starting server on %s\n", cfg.Addr))
-	return http.ListenAndServe(cfg.Addr, r)
+	addr := strings.Trim(cfg.Addr, "\"")
+	logger.Info(fmt.Sprintf("Starting server on %s\n", addr))
+	return http.ListenAndServe(addr, r)
 }

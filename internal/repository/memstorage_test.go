@@ -115,6 +115,6 @@ func TestMemStorageGetByID(t *testing.T) {
 	assert.Equal(t, 1.11, *metric.Value)
 	assert.Nil(t, metric.Delta)
 
-	metric, err = ms.GetByID("cnt2")
+	_, err = ms.GetByID("cnt2")
 	require.ErrorAs(t, err, &ErrMetricNotFound)
 }

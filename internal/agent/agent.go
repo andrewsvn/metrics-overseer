@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,7 +33,8 @@ func NewAgent(cfg *agentcfg.Config) (*Agent, error) {
 		return nil, fmt.Errorf("can't initialize logger: %w", err)
 	}
 
-	sndr, err := sender.NewRestSender(cfg.ServerAddr, logger)
+	serverAddr := strings.Trim(cfg.ServerAddr, "\"")
+	sndr, err := sender.NewRestSender(serverAddr, logger)
 	if err != nil {
 		return nil, fmt.Errorf("can't construct agent from config: %w", err)
 	}
