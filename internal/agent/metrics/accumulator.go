@@ -2,8 +2,6 @@ package metrics
 
 import (
 	"fmt"
-	"strconv"
-
 	"github.com/andrewsvn/metrics-overseer/internal/agent/sender"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 )
@@ -56,7 +54,7 @@ func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
 	return nil
 }
 
-func (ma *MetricAccumulator) ExtractAndSend(sendfunc sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) ExtractAndSend(sendfunc sender.MetricStructSendFunc) error {
 	switch ma.MType {
 	case model.Counter:
 		return ma.extractAndSendCounter(sendfunc)
@@ -67,13 +65,13 @@ func (ma *MetricAccumulator) ExtractAndSend(sendfunc sender.MetricSendFunc) erro
 	}
 }
 
-func (ma *MetricAccumulator) extractAndSendCounter(sendfunc sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) extractAndSendCounter(sendfunc sender.MetricStructSendFunc) error {
 	if ma.Delta == nil {
 		return nil
 	}
 
 	total := *ma.Delta
-	err := sendfunc(ma.ID, ma.MType, strconv.FormatInt(total, 10))
+	err := sendfunc(model.NewMetrics(ma.ID, ma.MType, ma.Delta, nil))
 	if err != nil {
 		return fmt.Errorf("error sending accumulated metric id=%s value=%d to server: %w", ma.ID, total, err)
 	}
@@ -87,7 +85,7 @@ func (ma *MetricAccumulator) extractAndSendCounter(sendfunc sender.MetricSendFun
 	return nil
 }
 
-func (ma *MetricAccumulator) extractAndSendGauge(sendfunc sender.MetricSendFunc) error {
+func (ma *MetricAccumulator) extractAndSendGauge(sendfunc sender.MetricStructSendFunc) error {
 	if len(ma.Values) == 0 {
 		return nil
 	}
@@ -100,7 +98,7 @@ func (ma *MetricAccumulator) extractAndSendGauge(sendfunc sender.MetricSendFunc)
 	}
 	total /= float64(count)
 
-	err := sendfunc(ma.ID, ma.MType, strconv.FormatFloat(total, 'f', 6, 64))
+	err := sendfunc(model.NewMetrics(ma.ID, ma.MType, nil, &total))
 	if err != nil {
 		return fmt.Errorf("error sending accumulated metric id=%s value=%f to server: %w", ma.ID, total, err)
 	}

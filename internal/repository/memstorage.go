@@ -51,6 +51,14 @@ func (ms *MemStorage) AddCounter(id string, delta int64) error {
 	return m.AddCounter(delta)
 }
 
+func (ms *MemStorage) GetByID(id string) (*model.Metrics, error) {
+	m, exists := ms.data[id]
+	if !exists {
+		return nil, ErrMetricNotFound
+	}
+	return m, nil
+}
+
 func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {
 	mlist := make([]*model.Metrics, 0, len(ms.data))
 	for _, v := range ms.data {

@@ -19,8 +19,8 @@ func NewLoggable(logger *zap.Logger) *Loggable {
 type enrichedResponseWriter struct {
 	http.ResponseWriter
 
-	Status      int
-	ContentSize int
+	ResponseStatus int
+	ResponseSize   int
 }
 
 func newEnrichedResponseWriter(w http.ResponseWriter) *enrichedResponseWriter {
@@ -29,18 +29,19 @@ func newEnrichedResponseWriter(w http.ResponseWriter) *enrichedResponseWriter {
 	}
 }
 
-func (w *enrichedResponseWriter) WriteHeader(status int) {
-	w.Status = status
-	w.ResponseWriter.WriteHeader(status)
+func (ew *enrichedResponseWriter) WriteHeader(status int) {
+	ew.ResponseStatus = status
+	ew.ResponseWriter.WriteHeader(status)
 }
 
-func (w *enrichedResponseWriter) Write(b []byte) (int, error) {
-	w.ContentSize = len(b)
-	return w.ResponseWriter.Write(b)
+func (ew *enrichedResponseWriter) Write(b []byte) (int, error) {
+	written, err := ew.ResponseWriter.Write(b)
+	ew.ResponseSize += written
+	return ew.ResponseSize, err
 }
 
-func (l *Loggable) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (l *Loggable) MiddlewareFunc(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		defer func(logger *zap.Logger) {
 			_ = logger.Sync()
 		}(l.logger)
@@ -58,8 +59,12 @@ func (l *Loggable) Middleware(next http.Handler) http.Handler {
 		sl.Infow("Request processed",
 			"url", r.URL.String(),
 			"method", r.Method,
-			"status", ew.Status,
-			"responseSize", ew.ContentSize,
+			"status", ew.ResponseStatus,
+			"responseSize", ew.ResponseSize,
 			"durationMs", duration.Milliseconds())
-	})
+	}
+}
+
+func (l *Loggable) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(l.MiddlewareFunc(next))
 }

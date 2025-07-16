@@ -26,7 +26,7 @@ func newTestSender(t *testing.T) *testSender {
 	}
 }
 
-func (ts *testSender) MetricSendFunc() sender.MetricSendFunc {
+func (ts *testSender) ValueSendFunc() sender.MetricValueSendFunc {
 	return func(id, mtype, value string) error {
 		ts.callTotal += 1
 		switch mtype {
@@ -40,6 +40,25 @@ func (ts *testSender) MetricSendFunc() sender.MetricSendFunc {
 			ts.gaugeCalls[id] = fval
 		default:
 			assert.Fail(ts.t, "Incorrect metric type passed: "+mtype)
+		}
+		return nil
+	}
+}
+
+func (ts *testSender) StructSendFunc() sender.MetricStructSendFunc {
+	return func(metric *model.Metrics) error {
+		ts.callTotal += 1
+		switch metric.MType {
+		case model.Counter:
+			assert.NotNil(ts.t, metric.Delta)
+			assert.Nil(ts.t, metric.Value)
+			ts.cntCalls[metric.ID] = *metric.Delta
+		case model.Gauge:
+			assert.NotNil(ts.t, metric.Value)
+			assert.Nil(ts.t, metric.Delta)
+			ts.gaugeCalls[metric.ID] = *metric.Value
+		default:
+			assert.Fail(ts.t, "Incorrect metric type passed: "+metric.MType)
 		}
 		return nil
 	}

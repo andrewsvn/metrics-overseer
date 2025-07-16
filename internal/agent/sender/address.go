@@ -7,6 +7,10 @@ import (
 )
 
 func enrichServerAddress(addr string) (string, error) {
+	// regexp to accept server address in 3 possible formats:
+	// - protocol://host:port
+	// - host:port
+	// - :port
 	re, err := regexp.Compile(`^(?:((?:http|https)://)?([^:]+))?(:\d+)$`)
 	if err != nil {
 		return "", fmt.Errorf("can't compile regexp for network address enrichment: %w", err)

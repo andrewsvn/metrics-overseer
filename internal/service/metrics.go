@@ -44,6 +44,17 @@ func (ms *MetricsService) GetGauge(id string) (*float64, error) {
 	return ms.storage.GetGauge(id)
 }
 
+func (ms *MetricsService) GetMetric(id, mtype string) (*model.Metrics, error) {
+	metric, err := ms.storage.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if metric.MType != mtype {
+		return nil, model.ErrIncorrectAccess
+	}
+	return metric, nil
+}
+
 func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 	if ms.allMetricsTmpl == nil {
 		tmpl := template.New("metricspage")

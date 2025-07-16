@@ -122,7 +122,7 @@ func (a *Agent) report(tc <-chan time.Time) {
 func (a *Agent) execReport() {
 	a.logger.Info("Reporting metrics to server")
 	for name, ma := range a.accums {
-		err := ma.ExtractAndSend(a.sndr.MetricSendFunc())
+		err := ma.ExtractAndSend(a.sndr.StructSendFunc())
 		if err != nil {
 			a.logger.Error(fmt.Sprintf("unable to send metric %s to server", name))
 		}

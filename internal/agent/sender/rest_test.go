@@ -21,6 +21,6 @@ func TestRestSender(t *testing.T) {
 	rs, err := NewRestSender("localhost:8080", logger)
 	require.NoError(t, err)
 
-	url := rs.composePostMetricURL("cnt1", model.Counter, "10")
+	url := rs.composePostMetricByPathURL("cnt1", model.Counter, "10")
 	assert.Equal(t, "http://localhost:8080/update/counter/cnt1/10", url)
 }

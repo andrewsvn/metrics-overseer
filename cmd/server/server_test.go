@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"io"
 	"net/http"
@@ -108,6 +109,88 @@ func TestUpdateHandler(t *testing.T) {
 		if test.want.response != "" {
 			assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
 		}
+	}
+}
+
+func TestUpdateValueByJSONHandler(t *testing.T) {
+	tests := []testCase{
+		{
+			name:   "counter_metric",
+			method: http.MethodPost,
+			body:   `{"id": "cnt1", "type": "counter", "delta": 10}`,
+			want: testWant{
+				code: http.StatusOK,
+			},
+		},
+		{
+			name:   "gauge_metric",
+			method: http.MethodPost,
+			body:   `{"id": "gauge1", "type": "gauge", "value": 1.05}`,
+			want: testWant{
+				code: http.StatusOK,
+			},
+		},
+		{
+			name:   "wrong_http_method",
+			method: http.MethodPut,
+			body:   `{"id": "gauge1", "type": "gauge", "value": 1.05}`,
+			want: testWant{
+				code: http.StatusMethodNotAllowed,
+			},
+		},
+		{
+			name:   "wrong_metric_type",
+			method: http.MethodPost,
+			body:   `{"id": "gauge1", "type": "value", "value": 1.05}`,
+			want: testWant{
+				code:     http.StatusBadRequest,
+				response: "unsupported metric type",
+			},
+		},
+		{
+			name:   "missing_counter_metric_value",
+			method: http.MethodPost,
+			body:   `{"id": "cnt1", "type": "counter", "value": 1.11}`,
+			want: testWant{
+				code:     http.StatusBadRequest,
+				response: "missing counter metric value",
+			},
+		},
+		{
+			name:   "missing_gauge_metric_value",
+			method: http.MethodPost,
+			body:   `{"id": "gauge1", "type": "gauge", "delta": 1}`,
+			want: testWant{
+				code:     http.StatusBadRequest,
+				response: "missing gauge metric value",
+			},
+		},
+	}
+
+	srv := setupServer()
+	defer srv.Close()
+
+	for _, test := range tests {
+		updateByJSONHandlerSingleTest(t, test, srv)
+	}
+}
+
+func updateByJSONHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Server) {
+	req, err := http.NewRequest(test.method, srv.URL+"/update", bytes.NewBufferString(test.body))
+	require.NoError(t, err)
+
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	assert.Equal(t, test.want.code, res.StatusCode)
+
+	resBody, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	if test.want.response != "" {
+		assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
 	}
 }
 
@@ -230,6 +313,108 @@ func TestGetValueHandler(t *testing.T) {
 				assert.Equal(t, test.want.response, strings.TrimSpace(string(resBody)))
 			}
 		}
+	}
+}
+
+func TestGetJSONValueHandler(t *testing.T) {
+	tests := []testCase{
+		{
+			name:   "get_existing_counter",
+			method: http.MethodPost,
+			body:   `{ "id": "cnt1", "type": "counter" }`,
+			want: testWant{
+				code:        http.StatusOK,
+				response:    `{ "id": "cnt1", "type": "counter", "delta": 10 }`,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:   "get_existing_gauge",
+			method: http.MethodPost,
+			body:   `{ "id": "gauge1", "type": "gauge" }`,
+			want: testWant{
+				code:        http.StatusOK,
+				response:    `{ "id": "gauge1", "type": "gauge", "value": 3.14 }`,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:   "get_nonexisting_counter",
+			method: http.MethodPost,
+			body:   `{ "id": "cnt10", "type": "counter" }`,
+			want: testWant{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:   "get_nonexisting_gauge",
+			method: http.MethodPost,
+			body:   `{ "id": "gauge10", "type": "gauge" }`,
+			want: testWant{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:   "get_gauge_as_counter",
+			method: http.MethodPost,
+			body:   `{ "id": "gauge1", "type": "counter" }`,
+			want: testWant{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:   "get_counter_as_gauge",
+			method: http.MethodPost,
+			body:   `{ "id": "cnt1", "type": "gauge" }`,
+			want: testWant{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:   "get_counter_wrong_method",
+			method: http.MethodPut,
+			body:   `{ "id": "cnt1", "type": "counter" }`,
+			want: testWant{
+				code: http.StatusMethodNotAllowed,
+			},
+		},
+		{
+			name:   "get_unknown_metric_type",
+			method: http.MethodPost,
+			body:   `{ "id": "cnt1", "type": "string" }`,
+			want: testWant{
+				code: http.StatusBadRequest,
+			},
+		},
+	}
+
+	srv := setupServer()
+	defer srv.Close()
+
+	for _, test := range tests {
+		getJSONValueHandlerSingleTest(t, test, srv)
+	}
+}
+
+func getJSONValueHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Server) {
+	req, err := http.NewRequest(test.method, srv.URL+"/value", bytes.NewBufferString(test.body))
+	require.NoError(t, err)
+
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	assert.Equal(t, test.want.code, res.StatusCode)
+	if test.want.contentType != "" {
+		assert.Equal(t, test.want.contentType, strings.Split(res.Header.Get("Content-Type"), ";")[0])
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	if test.want.response != "" {
+		assert.JSONEq(t, test.want.response, string(resBody))
 	}
 }
 

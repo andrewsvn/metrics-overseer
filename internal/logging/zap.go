@@ -19,7 +19,7 @@ func NewZapLogger(logLevel string) (*zap.Logger, error) {
 
 	logger, err := lcfg.Build()
 	if err != nil {
-		return nil, fmt.Errorf("error creating l: %w", err)
+		return nil, fmt.Errorf("error creating logger: %w", err)
 	}
 
 	return logger, nil
