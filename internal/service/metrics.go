@@ -3,11 +3,11 @@ package service
 import (
 	_ "embed"
 	"fmt"
-	"html/template"
-	"io"
-
+	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
+	"html/template"
+	"io"
 )
 
 //go:embed resources/metricspage.html
@@ -15,6 +15,7 @@ var metricspage string
 
 type MetricsService struct {
 	storage        repository.Storage
+	dumper         *dump.StorageDumper
 	allMetricsTmpl *template.Template
 }
 
@@ -28,12 +29,32 @@ func NewMetricsService(st repository.Storage) *MetricsService {
 	}
 }
 
+func (ms *MetricsService) AttachDumper(dm *dump.StorageDumper) {
+	ms.dumper = dm
+}
+
 func (ms *MetricsService) AccumulateCounter(id string, inc int64) error {
-	return ms.storage.AddCounter(id, inc)
+	err := ms.storage.AddCounter(id, inc)
+	if err != nil {
+		return err
+	}
+
+	if ms.dumper != nil {
+		ms.dumper.Store()
+	}
+	return nil
 }
 
 func (ms *MetricsService) SetGauge(id string, val float64) error {
-	return ms.storage.SetGauge(id, val)
+	err := ms.storage.SetGauge(id, val)
+	if err != nil {
+		return err
+	}
+
+	if ms.dumper != nil {
+		ms.dumper.Store()
+	}
+	return nil
 }
 
 func (ms *MetricsService) GetCounter(id string) (*int64, error) {

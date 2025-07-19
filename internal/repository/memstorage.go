@@ -70,6 +70,13 @@ func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {
 	return mlist, nil
 }
 
+func (ms *MemStorage) SetAll(metrics []*model.Metrics) error {
+	for _, m := range metrics {
+		ms.data[m.ID] = model.NewMetrics(m.ID, m.MType, m.Delta, m.Value)
+	}
+	return nil
+}
+
 func (ms *MemStorage) ResetAll() error {
 	for _, m := range ms.data {
 		m.Reset()

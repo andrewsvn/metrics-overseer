@@ -15,6 +15,7 @@ func NewZapLogger(logLevel string) (*zap.Logger, error) {
 	lcfg := zap.NewProductionConfig()
 	lcfg.DisableCaller = true
 	lcfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	lcfg.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
 	lcfg.Level = lvl
 
 	logger, err := lcfg.Build()

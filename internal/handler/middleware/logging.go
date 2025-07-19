@@ -61,6 +61,6 @@ func (l *HTTPLogging) Middleware(next http.Handler) http.Handler {
 			"method", r.Method,
 			"status", ew.ResponseStatus,
 			"responseSize", ew.ResponseSize,
-			"durationMs", duration.Milliseconds())
+			"duration", duration.String())
 	})
 }
