@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-type Loggable struct {
+type HTTPLogging struct {
 	logger *zap.Logger
 }
 
-func NewLoggable(logger *zap.Logger) *Loggable {
-	return &Loggable{
+func NewHTTPLogging(logger *zap.Logger) *HTTPLogging {
+	return &HTTPLogging{
 		logger: logger,
 	}
 }
@@ -40,8 +40,8 @@ func (ew *enrichedResponseWriter) Write(b []byte) (int, error) {
 	return ew.ResponseSize, err
 }
 
-func (l *Loggable) MiddlewareFunc(next http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (l *HTTPLogging) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func(logger *zap.Logger) {
 			_ = logger.Sync()
 		}(l.logger)
@@ -62,9 +62,5 @@ func (l *Loggable) MiddlewareFunc(next http.Handler) http.HandlerFunc {
 			"status", ew.ResponseStatus,
 			"responseSize", ew.ResponseSize,
 			"durationMs", duration.Milliseconds())
-	}
-}
-
-func (l *Loggable) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(l.MiddlewareFunc(next))
+	})
 }

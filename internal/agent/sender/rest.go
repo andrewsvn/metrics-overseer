@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"go.uber.org/zap"
 	"io"
@@ -16,6 +17,8 @@ type RestSender struct {
 	// we use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
+
+	we compress.WriteEngine
 
 	logger *zap.Logger
 }
@@ -30,6 +33,7 @@ func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
 	rs := &RestSender{
 		addr:   enrichedAddr,
 		cl:     &http.Client{},
+		we:     compress.NewGzipWriteEngine(),
 		logger: logger,
 	}
 	return rs, nil
@@ -53,11 +57,22 @@ func (rs RestSender) StructSendFunc() MetricStructSendFunc {
 		if err != nil {
 			return fmt.Errorf("can't construct metric send request: %w", err)
 		}
+
+		if rs.we != nil {
+			body, err = rs.we.WriteFlushed(body, 0)
+			if err != nil {
+				return fmt.Errorf("can't write compressed metric data: %w", err)
+			}
+		}
+
 		req, err := http.NewRequest(http.MethodPost, rs.addr+"/update", bytes.NewBufferString(string(body)))
 		if err != nil {
 			return fmt.Errorf("can't construct metric send request: %w", err)
 		}
 		req.Header.Add("Content-Type", "text/plain")
+		if rs.we != nil {
+			rs.we.SetContentEncoding(req.Header)
+		}
 
 		return rs.sendRequest(req)
 	}

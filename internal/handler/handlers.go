@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
@@ -17,12 +18,12 @@ import (
 
 type MetricsHandlers struct {
 	msrv   *service.MetricsService
+	decomp *compress.Decompressor
 	logger *zap.Logger
 }
 
 const (
 	logErrorWriteBody    = "Error writing response body"
-	logErrorCloseBody    = "Error closing request body"
 	logErrorDecodeBody   = "Error decoding request body"
 	logErrorGenHTML      = "Error generating metrics html"
 	logErrorUpdateMetric = "Error updating metric"
@@ -32,6 +33,7 @@ const (
 func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *MetricsHandlers {
 	return &MetricsHandlers{
 		msrv:   ms,
+		decomp: compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
 		logger: logger,
 	}
 }
@@ -39,8 +41,10 @@ func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *Metrics
 func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
 
-	lg := middleware.NewLoggable(mh.logger)
-	r.Use(lg.Middleware)
+	r.Use(
+		middleware.NewHTTPLogging(mh.logger).Middleware,
+		middleware.NewCompressing(mh.logger).Middleware,
+	)
 
 	r.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
 	r.Route("/update", func(r chi.Router) {
@@ -94,15 +98,15 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 
 func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		defer func() {
-			err := r.Body.Close()
-			if err != nil {
-				mh.logger.Error(logErrorCloseBody, zap.Error(err))
-			}
-		}()
+		body, err := mh.decomp.ReadRequestBody(r)
+		if err != nil {
+			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
+			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+			return
+		}
 
 		metric := &model.Metrics{}
-		if err := json.NewDecoder(r.Body).Decode(metric); err != nil {
+		if err := json.Unmarshal(body, &metric); err != nil {
 			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
 			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
 			return
@@ -140,8 +144,15 @@ func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 
 func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		body, err := mh.decomp.ReadRequestBody(r)
+		if err != nil {
+			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
+			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+			return
+		}
+
 		metric := &model.Metrics{}
-		if err := json.NewDecoder(r.Body).Decode(metric); err != nil {
+		if err := json.Unmarshal(body, &metric); err != nil {
 			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
 			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
 			return
