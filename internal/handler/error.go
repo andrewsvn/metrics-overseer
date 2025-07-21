@@ -2,32 +2,34 @@ package handler
 
 import "net/http"
 
-type HandlerError struct {
+type HandlingError struct {
 	StatusCode int
 	Message    string
+	Error      error
 }
 
-var (
-	InternalError *HandlerError = &HandlerError{
-		StatusCode: http.StatusInternalServerError,
-		Message:    http.StatusText(http.StatusInternalServerError),
-	}
-)
-
-func NewValidationHandlerError(message string) *HandlerError {
-	return &HandlerError{
+func NewValidationHandlerError(message string) *HandlingError {
+	return &HandlingError{
 		StatusCode: http.StatusBadRequest,
 		Message:    message,
 	}
 }
 
-func NewNotFoundHandlerError(message string) *HandlerError {
-	return &HandlerError{
+func NewNotFoundHandlerError(message string) *HandlingError {
+	return &HandlingError{
 		StatusCode: http.StatusNotFound,
 		Message:    message,
 	}
 }
 
-func (err *HandlerError) Render(rw http.ResponseWriter) {
+func NewInternalServerError(err error) *HandlingError {
+	return &HandlingError{
+		StatusCode: http.StatusInternalServerError,
+		Message:    http.StatusText(http.StatusInternalServerError),
+		Error:      err,
+	}
+}
+
+func (err *HandlingError) Render(rw http.ResponseWriter) {
 	http.Error(rw, err.Message, err.StatusCode)
 }

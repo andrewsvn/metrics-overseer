@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
+	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
@@ -19,22 +20,20 @@ import (
 type MetricsHandlers struct {
 	msrv   *service.MetricsService
 	decomp *compress.Decompressor
-	logger *zap.Logger
+	logger *zap.SugaredLogger
 }
 
 const (
-	logErrorWriteBody    = "Error writing response body"
-	logErrorDecodeBody   = "Error decoding request body"
-	logErrorGenHTML      = "Error generating metrics html"
-	logErrorUpdateMetric = "Error updating metric"
-	logErrorGetMetric    = "Error getting metric"
+	logErrorWriteBody = "error writing response body"
+	logErrorGenHTML   = "error generating metrics html"
 )
 
 func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *MetricsHandlers {
+	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
 	return &MetricsHandlers{
 		msrv:   ms,
 		decomp: compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
-		logger: logger,
+		logger: mhLogger,
 	}
 }
 
@@ -42,8 +41,8 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(
-		middleware.NewHTTPLogging(mh.logger).Middleware,
-		middleware.NewCompressing(mh.logger).Middleware,
+		middleware.NewHTTPLogging(mh.logger.Desugar()).Middleware,
+		middleware.NewCompressing(mh.logger.Desugar()).Middleware,
 	)
 
 	r.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
@@ -83,11 +82,17 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 
 		metric, he := mh.buildMetric(id, mtype, svalue)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
 		he = mh.processUpdateMetric(metric)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
@@ -100,30 +105,33 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		body, err := mh.decomp.ReadRequestBody(r)
 		if err != nil {
-			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
 			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
 			return
 		}
 
 		metric := &model.Metrics{}
 		if err := json.Unmarshal(body, &metric); err != nil {
-			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
-			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+			NewValidationHandlerError(fmt.Sprintf("error unmarshalling body: %v", err)).Render(rw)
 			return
 		}
 		he := mh.validateMetric(metric)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
 		he = mh.processUpdateMetric(metric)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
 
 		rw.WriteHeader(http.StatusOK)
-
 	}
 }
 
@@ -135,6 +143,9 @@ func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 
 		metric, he := mh.getMetric(id, mtype)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
@@ -146,20 +157,21 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		body, err := mh.decomp.ReadRequestBody(r)
 		if err != nil {
-			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
 			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
 			return
 		}
 
 		metric := &model.Metrics{}
 		if err := json.Unmarshal(body, &metric); err != nil {
-			mh.logger.Error(logErrorDecodeBody, zap.Error(err))
 			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
 			return
 		}
 
 		metric, he := mh.getMetric(metric.ID, metric.MType)
 		if he != nil {
+			if he.Error != nil {
+				mh.logger.Error(he.Message, zap.Error(he.Error))
+			}
 			he.Render(rw)
 			return
 		}
@@ -167,7 +179,7 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) processUpdateMetric(metric *model.Metrics) *HandlerError {
+func (mh *MetricsHandlers) processUpdateMetric(metric *model.Metrics) *HandlingError {
 	var err error
 
 	switch metric.MType {
@@ -176,20 +188,23 @@ func (mh *MetricsHandlers) processUpdateMetric(metric *model.Metrics) *HandlerEr
 	case model.Gauge:
 		err = mh.msrv.SetGauge(metric.ID, *metric.Value)
 	default:
-		return NewValidationHandlerError("unsupported metric type")
+		return NewValidationHandlerError("unsupported metric type: " + metric.MType)
 	}
 
 	if err != nil {
+		if errors.Is(err, dump.ErrStore) {
+			// no impact on main flow, only log this
+			mh.logger.Error("metrics store error", zap.Error(err))
+		}
 		if errors.Is(err, model.ErrIncorrectAccess) {
 			return NewValidationHandlerError("wrong metric type")
 		}
-		mh.logger.Error(logErrorUpdateMetric, zap.Error(err))
-		return InternalError
+		return NewInternalServerError(fmt.Errorf("error updating metric: %w", err))
 	}
 	return nil
 }
 
-func (mh *MetricsHandlers) buildMetric(id, mtype, svalue string) (*model.Metrics, *HandlerError) {
+func (mh *MetricsHandlers) buildMetric(id, mtype, svalue string) (*model.Metrics, *HandlingError) {
 	var delta *int64
 	var value *float64
 
@@ -197,23 +212,23 @@ func (mh *MetricsHandlers) buildMetric(id, mtype, svalue string) (*model.Metrics
 	case model.Counter:
 		dval, err := strconv.ParseInt(svalue, 10, 64)
 		if err != nil {
-			return nil, NewValidationHandlerError("invalid metric value")
+			return nil, NewValidationHandlerError("invalid metric value: " + svalue)
 		}
 		delta = &dval
 	case model.Gauge:
 		fval, err := strconv.ParseFloat(svalue, 64)
 		if err != nil {
-			return nil, NewValidationHandlerError("invalid metric value")
+			return nil, NewValidationHandlerError("invalid metric value: " + svalue)
 		}
 		value = &fval
 	default:
-		return nil, NewValidationHandlerError("unsupported metric type")
+		return nil, NewValidationHandlerError("unsupported metric type: " + mtype)
 	}
 
 	return model.NewMetrics(id, mtype, delta, value), nil
 }
 
-func (mh *MetricsHandlers) validateMetric(metric *model.Metrics) *HandlerError {
+func (mh *MetricsHandlers) validateMetric(metric *model.Metrics) *HandlingError {
 	switch metric.MType {
 	case model.Counter:
 		if metric.Delta == nil {
@@ -224,17 +239,17 @@ func (mh *MetricsHandlers) validateMetric(metric *model.Metrics) *HandlerError {
 			return NewValidationHandlerError("missing gauge metric value")
 		}
 	default:
-		return NewValidationHandlerError("unsupported metric type")
+		return NewValidationHandlerError("unsupported metric type: " + metric.MType)
 	}
 	return nil
 }
 
-func (mh *MetricsHandlers) getMetric(id, mtype string) (*model.Metrics, *HandlerError) {
+func (mh *MetricsHandlers) getMetric(id, mtype string) (*model.Metrics, *HandlingError) {
 	if len(strings.TrimSpace(id)) == 0 {
 		return nil, NewValidationHandlerError("missing metric id")
 	}
 	if mtype != model.Counter && mtype != model.Gauge {
-		return nil, NewValidationHandlerError("unsupported metric type")
+		return nil, NewValidationHandlerError("unsupported metric type: " + mtype)
 	}
 
 	metric, err := mh.msrv.GetMetric(id, mtype)
@@ -242,8 +257,7 @@ func (mh *MetricsHandlers) getMetric(id, mtype string) (*model.Metrics, *Handler
 		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrIncorrectAccess) {
 			return nil, NewNotFoundHandlerError("metric not found")
 		}
-		mh.logger.Error(logErrorGetMetric, zap.Error(err))
-		return nil, InternalError
+		return nil, NewInternalServerError(fmt.Errorf("error getting metric: %w", err))
 	}
 	return metric, nil
 }

@@ -20,12 +20,12 @@ type Config struct {
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
-func Read() *Config {
+func Read() (*Config, error) {
 	cfg := &Config{}
 	cfg.bindFlags()
 	flag.Parse()
-	_ = env.Parse(cfg)
-	return cfg
+	err := env.Parse(cfg)
+	return cfg, err
 }
 
 func Default() *Config {

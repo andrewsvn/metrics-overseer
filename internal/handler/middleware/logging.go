@@ -7,12 +7,13 @@ import (
 )
 
 type HTTPLogging struct {
-	logger *zap.Logger
+	logger *zap.SugaredLogger
 }
 
 func NewHTTPLogging(logger *zap.Logger) *HTTPLogging {
+	httpLogger := logger.Sugar().With(zap.String("component", "HTTP-logging"))
 	return &HTTPLogging{
-		logger: logger,
+		logger: httpLogger,
 	}
 }
 
@@ -42,25 +43,28 @@ func (ew *enrichedResponseWriter) Write(b []byte) (int, error) {
 
 func (l *HTTPLogging) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func(logger *zap.Logger) {
+		defer func(logger *zap.SugaredLogger) {
 			_ = logger.Sync()
 		}(l.logger)
 
-		sl := l.logger.Sugar()
-		sl.Infow("Request received",
+		l.logger.Infow("Request received",
 			"url", r.URL.String(),
-			"method", r.Method)
+			"method", r.Method,
+			"content-type", r.Header.Get("Content-Type"),
+			"content-encoding", r.Header.Get("Content-Encoding"))
 
 		ew := newEnrichedResponseWriter(w)
 		start := time.Now()
 		next.ServeHTTP(ew, r)
 		duration := time.Since(start)
 
-		sl.Infow("Request processed",
+		l.logger.Infow("Request processed",
 			"url", r.URL.String(),
 			"method", r.Method,
 			"status", ew.ResponseStatus,
 			"responseSize", ew.ResponseSize,
+			"content-type", ew.Header().Get("Content-Type"),
+			"content-encoding", ew.Header().Get("Content-Encoding"),
 			"duration", duration.String())
 	})
 }

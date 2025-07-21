@@ -8,24 +8,26 @@ import (
 
 type Compressor struct {
 	engines []WriteEngine
-	logger  *zap.Logger
+	logger  *zap.SugaredLogger
 }
 
-func NewCompressor(l *zap.Logger, engines ...WriteEngine) *Compressor {
+func NewCompressor(logger *zap.Logger, engines ...WriteEngine) *Compressor {
+	cmpLogger := logger.Sugar().With(zap.String("component", "compressor"))
 	return &Compressor{
 		engines: engines,
-		logger:  l,
+		logger:  cmpLogger,
 	}
 }
 
 func (c *Compressor) CreateCompressWriter(w http.ResponseWriter, r *http.Request) (CompressedResponseWriter, error) {
 	for _, wEngine := range c.engines {
 		if wEngine.Applicable(r.Header) {
-			c.logger.Debug("Compression engine chosen for response writing",
-				zap.String("name", wEngine.Name()))
+			c.logger.Debug(
+				"Compression engine chosen for response writing",
+				zap.String("name", wEngine.Name()),
+			)
 			crw, err := wEngine.NewResponseWriter(w, 0)
 			if err != nil {
-				c.logger.Error("Error creating compress writer", zap.Error(err))
 				return nil, fmt.Errorf("error creating compress writer: %w", err)
 			}
 			return crw, nil

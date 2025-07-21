@@ -22,12 +22,12 @@ type Config struct {
 	RestoreOnStartup bool   `env:"RESTORE"`
 }
 
-func Read() *Config {
+func Read() (*Config, error) {
 	cfg := &Config{}
 	cfg.bindFlags()
 	flag.Parse()
-	_ = env.Parse(cfg)
-	return cfg
+	err := env.Parse(cfg)
+	return cfg, err
 }
 
 func (cfg *Config) bindFlags() {

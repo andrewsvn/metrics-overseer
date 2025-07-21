@@ -2,43 +2,54 @@ package dump
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"go.uber.org/zap"
 	"os"
 )
 
+var (
+	ErrStore = errors.New("error storing metrics to file")
+	ErrLoad  = errors.New("error loading metrics from file")
+)
+
 type StorageDumper struct {
 	filename string
 
 	ms     repository.Storage
-	logger *zap.Logger
+	logger *zap.SugaredLogger
 }
 
 func NewStorageDumper(filename string, storage repository.Storage, logger *zap.Logger) *StorageDumper {
+	storageLogger := logger.Sugar().With(zap.String("component", "storage-dumper"))
 	return &StorageDumper{
 		filename: filename,
 		ms:       storage,
-		logger:   logger,
+		logger:   storageLogger,
 	}
 }
 
-func (sd *StorageDumper) Store() {
-	sd.logger.Info("Storing metrics to file", zap.String("filename", sd.filename))
+func (sd *StorageDumper) Store() error {
+	sd.logger.Infow("Storing metrics to file",
+		"filename", sd.filename,
+	)
+
 	metrics, err := sd.ms.GetAllSorted()
 	if err != nil {
-		sd.logger.Error("Error getting metrics to store", zap.Error(err))
-		return
+		return fmt.Errorf("error getting metrics to store: %w", err)
 	}
 	data, err := sd.serializeMetrics(metrics)
 	if err != nil {
-		sd.logger.Error("Error serializing metrics to JSON", zap.Error(err))
-		return
+		return fmt.Errorf("error serializing metrics to JSON: %w", err)
 	}
 	err = os.WriteFile(sd.filename, data, 0644)
 	if err != nil {
-		sd.logger.Error("Error storing metrics to file", zap.Error(err))
+		return fmt.Errorf("%w, reason: %v", ErrLoad, err)
 	}
+
+	return nil
 }
 
 func (sd *StorageDumper) serializeMetrics(metrics []*model.Metrics) ([]byte, error) {
@@ -62,21 +73,24 @@ func (sd *StorageDumper) serializeMetrics(metrics []*model.Metrics) ([]byte, err
 	return data, nil
 }
 
-func (sd *StorageDumper) Load() {
-	sd.logger.Info("Loading metrics from file", zap.String("filename", sd.filename))
+func (sd *StorageDumper) Load() error {
+	sd.logger.Infow("Loading metrics from file",
+		"filename", sd.filename,
+	)
+
 	bytes, err := os.ReadFile(sd.filename)
 	if err != nil {
-		sd.logger.Info("Unable to load metrics from file", zap.String("filename", sd.filename))
-		return
+		return fmt.Errorf("%w, reason: %v", ErrLoad, err)
 	}
 	metrics := make([]*model.Metrics, 0)
 	err = json.Unmarshal(bytes, &metrics)
 	if err != nil {
-		sd.logger.Error("Error unmarshalling metrics", zap.Error(err))
-		return
+		return fmt.Errorf("error unmarshalling metrics: %w", err)
 	}
 	err = sd.ms.SetAll(metrics)
 	if err != nil {
-		sd.logger.Error("Error storing metrics", zap.Error(err))
+		return fmt.Errorf("error storing metrics: %w", err)
 	}
+
+	return nil
 }

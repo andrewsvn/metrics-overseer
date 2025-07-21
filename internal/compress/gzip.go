@@ -31,7 +31,7 @@ func (gwe *GzipWriteEngine) NewResponseWriter(w http.ResponseWriter, level int) 
 	if err != nil {
 		return nil, fmt.Errorf("error intitalizing gzip writer: %w", err)
 	}
-	return &gzipResponseWriter{w, gw}, nil
+	return newGzipResponseWriter(w, gw), nil
 }
 
 func (gwe *GzipWriteEngine) WriteFlushed(data []byte, level int) ([]byte, error) {
@@ -94,19 +94,40 @@ func normalizeGzipLevel(level int) int {
 
 type gzipResponseWriter struct {
 	http.ResponseWriter
-	gw *gzip.Writer
+	gw      *gzip.Writer
+	written bool
+}
+
+func newGzipResponseWriter(w http.ResponseWriter, gw *gzip.Writer) *gzipResponseWriter {
+	return &gzipResponseWriter{
+		ResponseWriter: w,
+		gw:             gw,
+	}
 }
 
 func (grw *gzipResponseWriter) Write(data []byte) (int, error) {
-	return grw.gw.Write(data)
+	if checkContentTypeForCompression(grw.ResponseWriter.Header()) {
+		bcnt, err := grw.gw.Write(data)
+		if err == nil {
+			grw.written = true
+		}
+		return bcnt, err
+	} else {
+		return grw.ResponseWriter.Write(data)
+	}
 }
 
 func (grw *gzipResponseWriter) WriteHeader(statusCode int) {
-	grw.ResponseWriter.Header().Del("Content-Encoding")
-	grw.ResponseWriter.Header().Add("Content-Encoding", gzipEncoding)
+	if checkContentTypeForCompression(grw.ResponseWriter.Header()) {
+		grw.ResponseWriter.Header().Del("Content-Encoding")
+		grw.ResponseWriter.Header().Add("Content-Encoding", gzipEncoding)
+	}
 	grw.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (grw *gzipResponseWriter) Close() error {
+	if !grw.written {
+		return nil
+	}
 	return grw.gw.Close()
 }

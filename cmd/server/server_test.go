@@ -66,7 +66,7 @@ func TestUpdateByPathHandler(t *testing.T) {
 			url:    "/update/value/val1/100",
 			want: testWant{
 				code:     http.StatusBadRequest,
-				response: "unsupported metric type",
+				response: "unsupported metric type: value",
 			},
 		},
 		{
@@ -83,7 +83,7 @@ func TestUpdateByPathHandler(t *testing.T) {
 			url:    "/update/counter/cnt1/10e",
 			want: testWant{
 				code:     http.StatusBadRequest,
-				response: "invalid metric value",
+				response: "invalid metric value: 10e",
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestUpdateByPathHandler(t *testing.T) {
 			url:    "/update/gauge/gauge1/0x01",
 			want: testWant{
 				code:     http.StatusBadRequest,
-				response: "invalid metric value",
+				response: "invalid metric value: 0x01",
 			},
 		},
 	}
@@ -156,7 +156,7 @@ func TestUpdateValueByJSONHandler(t *testing.T) {
 			body:   `{"id": "gauge1", "type": "value", "value": 1.05}`,
 			want: testWant{
 				code:     http.StatusBadRequest,
-				response: "unsupported metric type",
+				response: "unsupported metric type: value",
 			},
 		},
 		{

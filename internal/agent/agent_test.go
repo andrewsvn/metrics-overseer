@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"strconv"
 	"testing"
 
@@ -65,7 +66,9 @@ func (ts *testSender) StructSendFunc() sender.MetricStructSendFunc {
 }
 
 func TestAgentAccumulators(t *testing.T) {
-	a, err := NewAgent(agentcfg.Default())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	assert.Empty(t, a.accums)
@@ -83,7 +86,9 @@ func TestAgentAccumulators(t *testing.T) {
 }
 
 func TestAgentPolling(t *testing.T) {
-	a, err := NewAgent(agentcfg.Default())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	a.execPoll()
@@ -95,7 +100,9 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	a, err := NewAgent(agentcfg.Default())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	a.storeCounterMetric("cnt1", 1)

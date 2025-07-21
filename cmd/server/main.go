@@ -24,7 +24,11 @@ func main() {
 }
 
 func run() error {
-	cfg := servercfg.Read()
+	cfg, err := servercfg.Read()
+	if err != nil {
+		return fmt.Errorf("can't read server config: %w", err)
+	}
+
 	logger, err := logging.NewZapLogger(cfg.LogLevel)
 	if err != nil {
 		return fmt.Errorf("can't initialize logger: %w", err)
@@ -34,8 +38,10 @@ func run() error {
 	mdumper := dump.NewStorageDumper(cfg.StorageFilePath, mstor, logger)
 
 	if cfg.RestoreOnStartup {
-		logger.Info("Restoring metrics on startup")
-		mdumper.Load()
+		err := mdumper.Load()
+		if err != nil {
+			logger.Error("failed to load metrics on startup", zap.Error(err))
+		}
 	}
 
 	// channel used to trigger data storage and passing exit flag
@@ -43,9 +49,15 @@ func run() error {
 	go func() {
 		for {
 			isExit := <-storeTriggerChan
-			mdumper.Store()
+
+			err := mdumper.Store()
+			if err != nil {
+				logger.Error("failed to store metrics", zap.Error(err))
+			}
+
 			if isExit {
 				// graceful shutdown (not implemented yet)
+				logger.Info("shutting down server")
 				os.Exit(0)
 			}
 		}
@@ -83,6 +95,8 @@ func run() error {
 	r := mhandlers.GetRouter()
 
 	addr := strings.Trim(cfg.Addr, "\"")
-	logger.Info(fmt.Sprintf("Starting server on %s", addr))
+	logger.Sugar().Infow("starting server",
+		"address", addr,
+	)
 	return http.ListenAndServe(addr, r)
 }

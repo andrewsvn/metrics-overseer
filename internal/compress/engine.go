@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+var compressableContentTypes []string
+
+func init() {
+	compressableContentTypes = append(compressableContentTypes, "application/json")
+	compressableContentTypes = append(compressableContentTypes, "text/html")
+}
+
 type CompressedResponseWriter interface {
 	http.ResponseWriter
 	Close() error
@@ -50,6 +57,17 @@ func checkContentEncoding(header http.Header, encodings ...string) bool {
 	contentEncoding := header.Get("Content-Encoding")
 	for _, encoding := range encodings {
 		if encoding == contentEncoding {
+			return true
+		}
+	}
+	return false
+}
+
+func checkContentTypeForCompression(header http.Header) bool {
+	contentType := header.Get("Content-Type")
+	contentType = strings.TrimSpace(strings.Split(contentType, ";")[0])
+	for _, allowed := range compressableContentTypes {
+		if allowed == contentType {
 			return true
 		}
 	}

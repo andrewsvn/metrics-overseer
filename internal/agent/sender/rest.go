@@ -14,27 +14,29 @@ import (
 type RestSender struct {
 	addr string
 
-	// we use a custom http client here for further customization
+	// cwe use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
 	cl *http.Client
 
-	we compress.WriteEngine
+	cwe compress.WriteEngine
 
-	logger *zap.Logger
+	logger *zap.SugaredLogger
 }
 
 func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
+	restLogger := logger.Sugar().With(zap.String("component", "rest-sender"))
+
 	enrichedAddr, err := enrichServerAddress(addr)
 	if err != nil {
 		return nil, fmt.Errorf("can't enrich address for sender to a proper format: %w", err)
 	}
 
-	logger.Info(fmt.Sprintf("Sender address for sending reports: %s", enrichedAddr))
+	restLogger.Info(fmt.Sprintf("Sender address for sending reports: %s", enrichedAddr))
 	rs := &RestSender{
 		addr:   enrichedAddr,
 		cl:     &http.Client{},
-		we:     compress.NewGzipWriteEngine(),
-		logger: logger,
+		cwe:    compress.NewGzipWriteEngine(),
+		logger: restLogger,
 	}
 	return rs, nil
 }
@@ -58,8 +60,8 @@ func (rs RestSender) StructSendFunc() MetricStructSendFunc {
 			return fmt.Errorf("can't construct metric send request: %w", err)
 		}
 
-		if rs.we != nil {
-			body, err = rs.we.WriteFlushed(body, 0)
+		if rs.cwe != nil {
+			body, err = rs.cwe.WriteFlushed(body, 0)
 			if err != nil {
 				return fmt.Errorf("can't write compressed metric data: %w", err)
 			}
@@ -69,9 +71,9 @@ func (rs RestSender) StructSendFunc() MetricStructSendFunc {
 		if err != nil {
 			return fmt.Errorf("can't construct metric send request: %w", err)
 		}
-		req.Header.Add("Content-Type", "text/plain")
-		if rs.we != nil {
-			rs.we.SetContentEncoding(req.Header)
+		req.Header.Add("Content-Type", "application/json")
+		if rs.cwe != nil {
+			rs.cwe.SetContentEncoding(req.Header)
 		}
 
 		return rs.sendRequest(req)

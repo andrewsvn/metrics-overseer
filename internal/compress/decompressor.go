@@ -1,6 +1,7 @@
 package compress
 
 import (
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
@@ -8,22 +9,29 @@ import (
 
 type Decompressor struct {
 	engines []ReadEngine
-	logger  *zap.Logger
+	logger  *zap.SugaredLogger
 }
 
-func NewDecompressor(l *zap.Logger, engines ...ReadEngine) *Decompressor {
+func NewDecompressor(logger *zap.Logger, engines ...ReadEngine) *Decompressor {
+	dcmpLogger := logger.Sugar().With(zap.String("component", "decompressor"))
 	return &Decompressor{
 		engines: engines,
-		logger:  l,
+		logger:  dcmpLogger,
 	}
 }
 
 func (d *Decompressor) ReadRequestBody(r *http.Request) ([]byte, error) {
 	for _, engine := range d.engines {
 		if engine.Applicable(r.Header) {
-			d.logger.Debug("Decompress reader chosen for request body", zap.String("name", engine.Name()))
+			d.logger.Debug(
+				"Decompress reader chosen for request body",
+				zap.String("name", engine.Name()),
+			)
 			b, err := engine.ReadAll(r.Body)
-			return b, err
+			if err != nil {
+				return nil, fmt.Errorf("can't decompress request body: %w", err)
+			}
+			return b, nil
 		}
 	}
 	b, err := io.ReadAll(r.Body)

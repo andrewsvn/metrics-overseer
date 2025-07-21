@@ -47,7 +47,7 @@ func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 
 func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
 	if ma.MType != model.Gauge {
-		return model.ErrIncorrectAccess
+		return fmt.Errorf("%w: expected gauge, got %v", model.ErrIncorrectAccess, ma.MType)
 	}
 
 	ma.Values = append(ma.Values, value)

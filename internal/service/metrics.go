@@ -40,7 +40,10 @@ func (ms *MetricsService) AccumulateCounter(id string, inc int64) error {
 	}
 
 	if ms.dumper != nil {
-		ms.dumper.Store()
+		err := ms.dumper.Store()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -52,7 +55,10 @@ func (ms *MetricsService) SetGauge(id string, val float64) error {
 	}
 
 	if ms.dumper != nil {
-		ms.dumper.Store()
+		err := ms.dumper.Store()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
