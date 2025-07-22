@@ -7,10 +7,7 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
@@ -44,32 +41,11 @@ func run() error {
 		}
 	}
 
-	// channel used to trigger data storage and passing exit flag
-	storeTriggerChan := make(chan bool, 1)
-	go func() {
-		for {
-			isExit := <-storeTriggerChan
-
-			err := mdumper.Store()
-			if err != nil {
-				logger.Error("failed to store metrics", zap.Error(err))
-			}
-
-			if isExit {
-				// graceful shutdown (not implemented yet)
-				logger.Info("shutting down server")
-				os.Exit(0)
-			}
-		}
-	}()
-
-	// subscribing on shutdown events
-	exitChan := make(chan os.Signal, 1)
-	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for {
-			<-exitChan
-			storeTriggerChan <- true
+	// store on shutdown - not implemented yet
+	defer func() {
+		err := mdumper.Store()
+		if err != nil {
+			logger.Error("failed to store metrics on shutdown", zap.Error(err))
 		}
 	}()
 
@@ -81,7 +57,10 @@ func run() error {
 		go func() {
 			for {
 				<-storeTicker.C
-				storeTriggerChan <- false
+				err := mdumper.Store()
+				if err != nil {
+					logger.Error("failed to store metrics", zap.Error(err))
+				}
 			}
 		}()
 	}

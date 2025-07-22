@@ -6,11 +6,9 @@ import (
 	"strings"
 )
 
-var compressableContentTypes []string
-
-func init() {
-	compressableContentTypes = append(compressableContentTypes, "application/json")
-	compressableContentTypes = append(compressableContentTypes, "text/html")
+var compressableContentTypes = []string{
+	"application/json",
+	"text/html",
 }
 
 type CompressedResponseWriter interface {
