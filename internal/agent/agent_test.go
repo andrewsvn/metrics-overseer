@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"strconv"
 	"testing"
 
@@ -11,22 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type TestSender struct {
+type testSender struct {
 	t          *testing.T
 	callTotal  int
 	cntCalls   map[string]int64
 	gaugeCalls map[string]float64
 }
 
-func NewTestSender(t *testing.T) *TestSender {
-	return &TestSender{
+func newTestSender(t *testing.T) *testSender {
+	return &testSender{
 		t:          t,
 		cntCalls:   make(map[string]int64),
 		gaugeCalls: make(map[string]float64),
 	}
 }
 
-func (ts *TestSender) MetricSendFunc() sender.MetricSendFunc {
+func (ts *testSender) ValueSendFunc() sender.MetricValueSendFunc {
 	return func(id, mtype, value string) error {
 		ts.callTotal += 1
 		switch mtype {
@@ -45,8 +46,29 @@ func (ts *TestSender) MetricSendFunc() sender.MetricSendFunc {
 	}
 }
 
+func (ts *testSender) StructSendFunc() sender.MetricStructSendFunc {
+	return func(metric *model.Metrics) error {
+		ts.callTotal += 1
+		switch metric.MType {
+		case model.Counter:
+			assert.NotNil(ts.t, metric.Delta)
+			assert.Nil(ts.t, metric.Value)
+			ts.cntCalls[metric.ID] = *metric.Delta
+		case model.Gauge:
+			assert.NotNil(ts.t, metric.Value)
+			assert.Nil(ts.t, metric.Delta)
+			ts.gaugeCalls[metric.ID] = *metric.Value
+		default:
+			assert.Fail(ts.t, "Incorrect metric type passed: "+metric.MType)
+		}
+		return nil
+	}
+}
+
 func TestAgentAccumulators(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	assert.Empty(t, a.accums)
@@ -64,7 +86,9 @@ func TestAgentAccumulators(t *testing.T) {
 }
 
 func TestAgentPolling(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	a.execPoll()
@@ -76,7 +100,9 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	a, err := NewAgent(agentcfg.DefaultConfig())
+	l, err := logging.NewZapLogger("info")
+	require.NoError(t, err)
+	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
 	a.storeCounterMetric("cnt1", 1)
@@ -89,7 +115,7 @@ func TestAgentReporting(t *testing.T) {
 	a.storeGaugeMetric("gauge1", 1.75)
 	a.storeGaugeMetric("gauge2", 3.14)
 
-	ts := NewTestSender(t)
+	ts := newTestSender(t)
 	a.sndr = ts
 	a.execReport()
 

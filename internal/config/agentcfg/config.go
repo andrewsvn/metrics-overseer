@@ -3,32 +3,38 @@ package agentcfg
 import (
 	"flag"
 	"fmt"
+	"github.com/caarlos0/env/v6"
 )
 
 const (
 	defaultServerAddr        = "http://localhost:8080"
 	defaultPollIntervalSec   = 2
 	defaultReportIntervalSec = 10
+	defaultLogLevel          = "info"
 )
 
 type Config struct {
-	ServerAddr        string
-	PollIntervalSec   int
-	ReportIntervalSec int
+	ServerAddr        string `env:"ADDRESS"`
+	PollIntervalSec   int    `env:"POLL_INTERVAL"`
+	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
+	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
-func DefaultConfig() *Config {
-	return &Config{
-		ServerAddr:        defaultServerAddr,
-		PollIntervalSec:   defaultPollIntervalSec,
-		ReportIntervalSec: defaultReportIntervalSec,
-	}
-}
-
-func ReadFromCLArgs() *Config {
+func Read() (*Config, error) {
 	cfg := &Config{}
 	cfg.bindFlags()
 	flag.Parse()
+	err := env.Parse(cfg)
+	return cfg, err
+}
+
+func Default() *Config {
+	cfg := &Config{
+		ServerAddr:        defaultServerAddr,
+		PollIntervalSec:   defaultPollIntervalSec,
+		ReportIntervalSec: defaultReportIntervalSec,
+		LogLevel:          defaultLogLevel,
+	}
 	return cfg
 }
 

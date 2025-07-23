@@ -1,7 +1,13 @@
 package sender
 
-type MetricSendFunc func(id string, mtype string, value string) error
+import (
+	"github.com/andrewsvn/metrics-overseer/internal/model"
+)
+
+type MetricValueSendFunc func(id string, mtype string, value string) error
+type MetricStructSendFunc func(metric *model.Metrics) error
 
 type MetricSender interface {
-	MetricSendFunc() MetricSendFunc
+	ValueSendFunc() MetricValueSendFunc
+	StructSendFunc() MetricStructSendFunc
 }
