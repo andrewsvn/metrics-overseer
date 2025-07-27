@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
-	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
@@ -211,7 +210,7 @@ func (mh *MetricsHandlers) processUpdateMetric(metric *model.Metrics) *HandlingE
 	}
 
 	if err != nil {
-		if errors.Is(err, dump.ErrStore) {
+		if errors.Is(err, repository.ErrStore) {
 			// no impact on main flow, only log this
 			mh.logger.Error("metrics store error", zap.Error(err))
 		}

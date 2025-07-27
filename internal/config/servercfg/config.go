@@ -13,13 +13,16 @@ const (
 	defaultRestoreOnStartup = false
 )
 
-type Config struct {
-	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
-
-	Addr             string `env:"ADDRESS"`
+type StoreConfig struct {
 	StoreIntervalSec int    `env:"STORE_INTERVAL"`
 	StorageFilePath  string `env:"FILE_STORAGE_PATH"`
 	RestoreOnStartup bool   `env:"RESTORE"`
+}
+
+type Config struct {
+	StoreConfig
+	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
+	Addr     string `env:"ADDRESS"`
 }
 
 func Read() (*Config, error) {
