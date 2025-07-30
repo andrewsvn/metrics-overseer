@@ -14,7 +14,7 @@ type PostgresDB struct {
 func NewPostgresDB(ctx context.Context, cfg *dbcfg.Config) (*PostgresDB, error) {
 	dbc, err := pgxpool.New(ctx, cfg.DBConnString)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to create database connection: %w", err)
 	}
 
 	return &PostgresDB{

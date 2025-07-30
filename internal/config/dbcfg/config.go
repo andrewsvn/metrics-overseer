@@ -2,8 +2,11 @@ package dbcfg
 
 import (
 	"flag"
-	"fmt"
 	"github.com/caarlos0/env/v6"
+)
+
+const (
+	defaultPostgresConnString = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 )
 
 type Config struct {
@@ -19,13 +22,10 @@ func Read() (*Config, error) {
 		return nil, err
 	}
 
-	if cfg.DBConnString == "" {
-		return nil, fmt.Errorf("DB connection string is not set")
-	}
 	return cfg, nil
 }
 
 func (cfg *Config) bindFlags() {
-	flag.StringVar(&cfg.DBConnString, "d", "",
+	flag.StringVar(&cfg.DBConnString, "d", defaultPostgresConnString,
 		"postgres database connection string")
 }
