@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"github.com/andrewsvn/metrics-overseer/internal/mocks"
+	"github.com/golang/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -97,7 +101,10 @@ func TestUpdateByPathHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := setupServer(mocks.NewMockConnection(ctrl))
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -179,7 +186,10 @@ func TestUpdateValueByJSONHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := setupServer(mocks.NewMockConnection(ctrl))
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -280,7 +290,10 @@ func TestGetPlainValueHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := setupServer(mocks.NewMockConnection(ctrl))
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -395,7 +408,10 @@ func TestGetJSONValueHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := setupServer(mocks.NewMockConnection(ctrl))
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -426,7 +442,10 @@ func getJSONValueHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Se
 }
 
 func TestGetAllMetricsPage(t *testing.T) {
-	srv := setupServer()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := setupServer(mocks.NewMockConnection(ctrl))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
@@ -449,14 +468,45 @@ func TestGetAllMetricsPage(t *testing.T) {
 		string(resBody))
 }
 
-func setupServer() *httptest.Server {
+func TestDBConnectionPing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mconn := mocks.NewMockConnection(ctrl)
+	mconn.EXPECT().Ping(gomock.Any()).Return(nil).Times(1)
+
+	srv := setupServer(mconn)
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/ping", nil)
+	require.NoError(t, err)
+
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	mconn.EXPECT().Ping(gomock.Any()).Return(fmt.Errorf("no connection")).Times(1)
+
+	res2, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res2.Body.Close()
+	}()
+	assert.Equal(t, http.StatusInternalServerError, res2.StatusCode)
+}
+
+func setupServer(conn db.Connection) *httptest.Server {
+
 	logger, _ := logging.NewZapLogger("info")
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
 	_ = msrv.AccumulateCounter("cnt1", 10)
 	_ = msrv.SetGauge("gauge1", 3.14)
-	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, conn, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
@@ -19,6 +20,7 @@ import (
 
 type MetricsHandlers struct {
 	msrv   *service.MetricsService
+	dbconn db.Connection
 	decomp *compress.Decompressor
 	logger *zap.SugaredLogger
 }
@@ -28,10 +30,12 @@ const (
 	logErrorGenHTML   = "error generating metrics html"
 )
 
-func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *MetricsHandlers {
+func NewMetricsHandlers(ms *service.MetricsService, dbconn db.Connection,
+	logger *zap.Logger) *MetricsHandlers {
 	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
 	return &MetricsHandlers{
 		msrv:   ms,
+		dbconn: dbconn,
 		decomp: compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
 		logger: mhLogger,
 	}
@@ -51,6 +55,9 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	})
 	r.Route("/value", func(r chi.Router) {
 		r.Post("/", mh.getJSONValueHandler())
+	})
+	r.Route("/ping", func(r chi.Router) {
+		r.Get("/", mh.pingDatabaseHandler())
 	})
 	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
 	r.Get("/", mh.showMetricsPage())
@@ -176,6 +183,18 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 			return
 		}
 		mh.renderMetricJSON(rw, metric)
+	}
+}
+
+func (mh *MetricsHandlers) pingDatabaseHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		err := mh.dbconn.Ping(r.Context())
+		if err != nil {
+			mh.logger.Error("failed to ping postgres database connection", zap.Error(err))
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		rw.WriteHeader(http.StatusOK)
 	}
 }
 

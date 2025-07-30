@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/config/dbcfg"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"go.uber.org/zap"
@@ -65,12 +68,23 @@ func run() error {
 		}()
 	}
 
+	dbconf, err := dbcfg.Read()
+	if err != nil {
+		return fmt.Errorf("can't read database config: %w", err)
+	}
+
+	dbconn, err := db.NewPostgresDB(context.Background(), dbconf)
+	if err != nil {
+		return fmt.Errorf("can't create postgres database connection pool: %w", err)
+	}
+	defer dbconn.Close()
+
 	msrv := service.NewMetricsService(mstor)
 	if cfg.StoreIntervalSec == 0 {
 		msrv.AttachDumper(mdumper)
 	}
 
-	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, dbconn, logger)
 	r := mhandlers.GetRouter()
 
 	addr := strings.Trim(cfg.Addr, "\"")
