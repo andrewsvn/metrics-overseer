@@ -9,14 +9,11 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
-	"github.com/golang-migrate/migrate/v4"
+	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"strings"
-
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func main() {
@@ -79,21 +76,9 @@ func initializeDB(cfg *servercfg.DatabaseConfig, logger *zap.Logger) (*db.Postgr
 		return nil, nil
 	}
 
-	m, err := migrate.New(
-		"file:///migrations",
-		cfg.DBConnString)
+	err := migrations.MigrateDB(cfg, logger)
 	if err != nil {
-		m, err = migrate.New(
-			"file://../../migrations",
-			cfg.DBConnString)
-		if err != nil {
-			return nil, fmt.Errorf("can't initialize database migration: %w", err)
-		}
-	}
-
-	err = m.Up()
-	if err != nil {
-		logger.Sugar().Infow("database migration returned", "result", err.Error())
+		return nil, err
 	}
 
 	dbconn, err := db.NewPostgresDB(context.Background(), cfg)
