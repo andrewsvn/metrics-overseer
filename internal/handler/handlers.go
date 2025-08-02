@@ -187,6 +187,12 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 
 func (mh *MetricsHandlers) pingDatabaseHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		if mh.dbconn == nil {
+			mh.logger.Error("database connection not set up - unable to ping")
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
 		err := mh.dbconn.Ping(r.Context())
 		if err != nil {
 			mh.logger.Error("failed to ping postgres database connection", zap.Error(err))

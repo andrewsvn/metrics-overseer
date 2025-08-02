@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/config/dbcfg"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"strings"
@@ -30,17 +30,21 @@ func run() error {
 		return fmt.Errorf("can't initialize logger: %w", err)
 	}
 
-	fstor := repository.NewFileStorage(&cfg.StoreConfig, logger)
-	// store on shutdown - not implemented yet
-	defer fstor.Close()
-
-	dbconn, err := initializeDB()
+	dbconn, err := initializeDB(&cfg.DatabaseConfig, logger)
 	if err != nil {
 		return err
 	}
-	defer dbconn.Close()
+	// no need to close here since postgres repository will handle this
 
-	msrv := service.NewMetricsService(fstor)
+	stor := initializeStorage(cfg, dbconn, logger)
+	defer func() {
+		err := stor.Close()
+		if err != nil {
+			logger.Error("failed to close storage", zap.Error(err))
+		}
+	}()
+
+	msrv := service.NewMetricsService(stor)
 	mhandlers := handler.NewMetricsHandlers(msrv, dbconn, logger)
 	r := mhandlers.GetRouter()
 
@@ -51,16 +55,32 @@ func run() error {
 	return http.ListenAndServe(addr, r)
 }
 
-func initializeDB() (*db.PostgresDB, error) {
-	dbconf, err := dbcfg.Read()
-	if err != nil {
-		return nil, fmt.Errorf("can't read database config: %w", err)
+func initializeStorage(cfg *servercfg.Config, dbconn *db.PostgresDB, logger *zap.Logger) repository.Storage {
+	if dbconn != nil {
+		logger.Info("initializing postgres storage")
+		return repository.NewPostgresDBStorage(dbconn.Pool(), logger)
 	}
 
-	dbconn, err := db.NewPostgresDB(context.Background(), dbconf)
+	if cfg.FileStorageConfig.IsSetUp() {
+		logger.Info("initializing file storage")
+		return repository.NewFileStorage(&cfg.FileStorageConfig, logger)
+	}
+
+	logger.Info("initializing memory storage")
+	return repository.NewMemStorage()
+}
+
+func initializeDB(cfg *servercfg.DatabaseConfig, logger *zap.Logger) (*db.PostgresDB, error) {
+	if !cfg.IsSetUp() {
+		return nil, nil
+	}
+
+	dbconn, err := db.NewPostgresDB(context.Background(), cfg)
 	if err != nil {
 		return nil, fmt.Errorf("can't create postgres database connection pool: %w", err)
 	}
 
+	logger.Sugar().Infow("initialized postgres database connection pool",
+		"DSN", cfg.DBConnString)
 	return dbconn, nil
 }

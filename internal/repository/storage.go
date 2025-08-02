@@ -21,9 +21,13 @@ type Storage interface {
 
 	// GetAllSorted should return the full list of metrics sorted by ID lexicographically
 	GetAllSorted() ([]*model.Metrics, error)
+
+	// SetAll allows to bulk set data from an external source
 	SetAll(metrics []*model.Metrics) error
 
 	ResetAll() error
+
+	Close() error
 }
 
 var (

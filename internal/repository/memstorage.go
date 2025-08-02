@@ -83,3 +83,7 @@ func (ms *MemStorage) ResetAll() error {
 	}
 	return nil
 }
+
+func (ms *MemStorage) Close() error {
+	return nil
+}

@@ -23,7 +23,7 @@ type FileStorage struct {
 	logger      *zap.SugaredLogger
 }
 
-func NewFileStorage(cfg *servercfg.StoreConfig, logger *zap.Logger) *FileStorage {
+func NewFileStorage(cfg *servercfg.FileStorageConfig, logger *zap.Logger) *FileStorage {
 	fstLogger := logger.Sugar().With(zap.String("component", "file-storage"))
 	fst := &FileStorage{
 		MemStorage: NewMemStorage(),
@@ -60,11 +60,12 @@ func NewFileStorage(cfg *servercfg.StoreConfig, logger *zap.Logger) *FileStorage
 	return fst
 }
 
-func (fst *FileStorage) Close() {
+func (fst *FileStorage) Close() error {
 	err := fst.store()
 	if err != nil {
-		fst.logger.Error("failed to store metrics on shutdown", zap.Error(err))
+		return fmt.Errorf("failed to store metrics on closing: %w", err)
 	}
+	return nil
 }
 
 func (fst *FileStorage) AddCounter(id string, value int64) error {

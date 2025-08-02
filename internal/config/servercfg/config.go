@@ -9,18 +9,30 @@ import (
 const (
 	defaultAddr             = ":8080"
 	defaultStoreIntervalSec = 300
-	defaultStorageFilePath  = "./metrics.json"
 	defaultRestoreOnStartup = false
 )
 
-type StoreConfig struct {
-	StoreIntervalSec int    `env:"STORE_INTERVAL"`
+type FileStorageConfig struct {
 	StorageFilePath  string `env:"FILE_STORAGE_PATH"`
+	StoreIntervalSec int    `env:"STORE_INTERVAL"`
 	RestoreOnStartup bool   `env:"RESTORE"`
 }
 
+func (fscfg *FileStorageConfig) IsSetUp() bool {
+	return fscfg.StorageFilePath != ""
+}
+
+type DatabaseConfig struct {
+	DBConnString string `env:"DATABASE_DSN"`
+}
+
+func (dbcfg *DatabaseConfig) IsSetUp() bool {
+	return dbcfg.DBConnString != ""
+}
+
 type Config struct {
-	StoreConfig
+	FileStorageConfig
+	DatabaseConfig
 	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
 	Addr     string `env:"ADDRESS"`
 }
@@ -36,10 +48,14 @@ func Read() (*Config, error) {
 func (cfg *Config) bindFlags() {
 	flag.StringVar(&cfg.Addr, "a", defaultAddr,
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
+
+	flag.StringVar(&cfg.StorageFilePath, "f", "",
+		"metrics storage file path (should be specified to enable file storage)")
 	flag.IntVar(&cfg.StoreIntervalSec, "i", defaultStoreIntervalSec,
 		"metrics storing interval in seconds (0 for synchronous store)")
-	flag.StringVar(&cfg.StorageFilePath, "f", defaultStorageFilePath,
-		"metrics storage file path")
 	flag.BoolVar(&cfg.RestoreOnStartup, "r", defaultRestoreOnStartup,
 		"flag for restoring metrics on startup")
+
+	flag.StringVar(&cfg.DBConnString, "d", "",
+		"postgres database connection string (should be specified to enable postgres storage)")
 }
