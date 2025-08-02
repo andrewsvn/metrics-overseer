@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
 //go:embed *.sql
