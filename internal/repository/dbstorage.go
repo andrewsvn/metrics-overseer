@@ -26,15 +26,15 @@ func NewPostgresDBStorage(pool *pgxpool.Pool, logger *zap.Logger) *PostgresDBSto
 	}
 }
 
-func (pgs *PostgresDBStorage) GetGauge(id string) (*float64, error) {
-	m, err := pgs.GetByID(id)
+func (pgs *PostgresDBStorage) GetGauge(ctx context.Context, id string) (*float64, error) {
+	m, err := pgs.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return m.GetGauge()
 }
 
-func (pgs *PostgresDBStorage) SetGauge(id string, value float64) error {
+func (pgs *PostgresDBStorage) SetGauge(ctx context.Context, id string, value float64) error {
 	query, args, err := pgs.sqrl.Insert("metrics").
 		Columns("id", "mtype", "value").
 		Values(id, model.Gauge, value).
@@ -48,7 +48,7 @@ func (pgs *PostgresDBStorage) SetGauge(id string, value float64) error {
 	}
 
 	pgs.logger.Debugw("set gauge query", "query", query, "args", args)
-	res, err := pgs.pool.Exec(context.Background(), query, args...)
+	res, err := pgs.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to execute set gauge query: %w", err)
 	}
@@ -59,15 +59,15 @@ func (pgs *PostgresDBStorage) SetGauge(id string, value float64) error {
 	return nil
 }
 
-func (pgs *PostgresDBStorage) GetCounter(id string) (*int64, error) {
-	m, err := pgs.GetByID(id)
+func (pgs *PostgresDBStorage) GetCounter(ctx context.Context, id string) (*int64, error) {
+	m, err := pgs.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return m.GetCounter()
 }
 
-func (pgs *PostgresDBStorage) AddCounter(id string, delta int64) error {
+func (pgs *PostgresDBStorage) AddCounter(ctx context.Context, id string, delta int64) error {
 	query, args, err := pgs.sqrl.Insert("metrics").
 		Columns("id", "mtype", "delta").
 		Values(id, model.Counter, delta).
@@ -81,7 +81,7 @@ func (pgs *PostgresDBStorage) AddCounter(id string, delta int64) error {
 	}
 
 	pgs.logger.Debugw("add counter query", "query", query, "args", args)
-	res, err := pgs.pool.Exec(context.Background(), query, args...)
+	res, err := pgs.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to execute add counter query: %w", err)
 	}
@@ -92,7 +92,7 @@ func (pgs *PostgresDBStorage) AddCounter(id string, delta int64) error {
 	return nil
 }
 
-func (pgs *PostgresDBStorage) GetByID(id string) (*model.Metrics, error) {
+func (pgs *PostgresDBStorage) GetByID(ctx context.Context, id string) (*model.Metrics, error) {
 	query, args, err := pgs.sqrl.Select("mtype", "delta", "value").
 		From("metrics").
 		Where(squirrel.Eq{"id": id}).
@@ -102,7 +102,7 @@ func (pgs *PostgresDBStorage) GetByID(id string) (*model.Metrics, error) {
 	}
 
 	pgs.logger.Debugw("get metric by ID query", "query", query, "args", args)
-	row := pgs.pool.QueryRow(context.Background(), query, args...)
+	row := pgs.pool.QueryRow(ctx, query, args...)
 	var mtype string
 	var delta *int64
 	var value *float64
@@ -116,15 +116,15 @@ func (pgs *PostgresDBStorage) GetByID(id string) (*model.Metrics, error) {
 	return model.NewMetrics(id, mtype, delta, value), nil
 }
 
-func (pgs *PostgresDBStorage) BatchUpdate(metrics []*model.Metrics) error {
-	err := pgs.batchValidate(metrics)
+func (pgs *PostgresDBStorage) BatchUpdate(ctx context.Context, metrics []*model.Metrics) error {
+	err := pgs.batchValidate(ctx, metrics)
 	if err != nil {
 		return err
 	}
-	return pgs.batchSet(metrics)
+	return pgs.batchSet(ctx, metrics)
 }
 
-func (pgs *PostgresDBStorage) GetAllSorted() ([]*model.Metrics, error) {
+func (pgs *PostgresDBStorage) GetAllSorted(ctx context.Context) ([]*model.Metrics, error) {
 	query, args, err := pgs.sqrl.Select("id", "mtype", "delta", "value").
 		From("metrics").
 		OrderBy("id ASC").
@@ -134,7 +134,7 @@ func (pgs *PostgresDBStorage) GetAllSorted() ([]*model.Metrics, error) {
 	}
 
 	pgs.logger.Debugw("get all metrics query", "query", query, "args", args)
-	rows, err := pgs.pool.Query(context.Background(), query, args...)
+	rows, err := pgs.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute get all metrics query: %w", err)
 	}
@@ -158,12 +158,12 @@ func (pgs *PostgresDBStorage) GetAllSorted() ([]*model.Metrics, error) {
 	return metrics, nil
 }
 
-func (pgs *PostgresDBStorage) SetAll(metrics []*model.Metrics) error {
-	return pgs.BatchUpdate(metrics)
+func (pgs *PostgresDBStorage) SetAll(ctx context.Context, metrics []*model.Metrics) error {
+	return pgs.BatchUpdate(ctx, metrics)
 }
 
-func (pgs *PostgresDBStorage) ResetAll() error {
-	if _, err := pgs.pool.Exec(context.Background(), "TRUNCATE TABLE metrics"); err != nil {
+func (pgs *PostgresDBStorage) ResetAll(ctx context.Context) error {
+	if _, err := pgs.pool.Exec(ctx, "TRUNCATE TABLE metrics"); err != nil {
 		return fmt.Errorf("failed to truncate all metrics table: %w", err)
 	}
 	return nil
@@ -174,14 +174,14 @@ func (pgs *PostgresDBStorage) Close() error {
 	return nil
 }
 
-func (pgs *PostgresDBStorage) batchValidate(metrics []*model.Metrics) error {
+func (pgs *PostgresDBStorage) batchValidate(ctx context.Context, metrics []*model.Metrics) error {
 	query, args, err := pgs.sqrl.Select("id", "mtype").From("metrics").ToSql()
 	if err != nil {
 		return fmt.Errorf("failed to compose get metric types query: %w", err)
 	}
 
 	pgs.logger.Debugw("batch get metric query", "query", query, "args", args)
-	rows, err := pgs.pool.Query(context.Background(), query, args...)
+	rows, err := pgs.pool.Query(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to get metric types: %w", err)
 	}
@@ -210,13 +210,13 @@ func (pgs *PostgresDBStorage) batchValidate(metrics []*model.Metrics) error {
 	return nil
 }
 
-func (pgs *PostgresDBStorage) batchSet(metrics []*model.Metrics) error {
-	tx, err := pgs.pool.BeginTx(context.Background(), pgx.TxOptions{})
+func (pgs *PostgresDBStorage) batchSet(ctx context.Context, metrics []*model.Metrics) error {
+	tx, err := pgs.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to initialize DB transaction: %w", err)
 	}
 	defer func() {
-		err := tx.Rollback(context.Background())
+		err := tx.Rollback(ctx)
 		if err != nil {
 			pgs.logger.Warnw("failed to rollback transaction",
 				"err", err,
@@ -239,10 +239,10 @@ func (pgs *PostgresDBStorage) batchSet(metrics []*model.Metrics) error {
 			return fmt.Errorf("failed to compose set metrics query: %w", err)
 		}
 
-		if _, err := tx.Exec(context.Background(), query, args...); err != nil {
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
 			return fmt.Errorf("failed to set metrics: %w", err)
 		}
 	}
 
-	return tx.Commit(context.Background())
+	return tx.Commit(ctx)
 }

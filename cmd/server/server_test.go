@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
@@ -499,13 +500,13 @@ func TestDBConnectionPing(t *testing.T) {
 }
 
 func setupServer(conn db.Connection) *httptest.Server {
-
+	ctx := context.Background()
 	logger, _ := logging.NewZapLogger("info")
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
-	_ = msrv.AccumulateCounter("cnt1", 10)
-	_ = msrv.SetGauge("gauge1", 3.14)
+	_ = msrv.AccumulateCounter(ctx, "cnt1", 10)
+	_ = msrv.SetGauge(ctx, "gauge1", 3.14)
 	mhandlers := handler.NewMetricsHandlers(msrv, conn, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())

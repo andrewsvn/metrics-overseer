@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (ms *MemStorage) GetGauge(id string) (*float64, error) {
+func (ms *MemStorage) GetGauge(_ context.Context, id string) (*float64, error) {
 	m, exists := ms.data[id]
 	if !exists {
 		return nil, ErrMetricNotFound
@@ -26,7 +27,7 @@ func (ms *MemStorage) GetGauge(id string) (*float64, error) {
 	return m.GetGauge()
 }
 
-func (ms *MemStorage) SetGauge(id string, value float64) error {
+func (ms *MemStorage) SetGauge(_ context.Context, id string, value float64) error {
 	m, exists := ms.data[id]
 	if !exists {
 		m = model.NewGaugeMetrics(id)
@@ -35,7 +36,7 @@ func (ms *MemStorage) SetGauge(id string, value float64) error {
 	return m.SetGauge(value)
 }
 
-func (ms *MemStorage) GetCounter(id string) (*int64, error) {
+func (ms *MemStorage) GetCounter(_ context.Context, id string) (*int64, error) {
 	m, exists := ms.data[id]
 	if !exists {
 		return nil, ErrMetricNotFound
@@ -43,7 +44,7 @@ func (ms *MemStorage) GetCounter(id string) (*int64, error) {
 	return m.GetCounter()
 }
 
-func (ms *MemStorage) AddCounter(id string, delta int64) error {
+func (ms *MemStorage) AddCounter(_ context.Context, id string, delta int64) error {
 	m, exists := ms.data[id]
 	if !exists {
 		m = model.NewCounterMetrics(id)
@@ -52,7 +53,7 @@ func (ms *MemStorage) AddCounter(id string, delta int64) error {
 	return m.AddCounter(delta)
 }
 
-func (ms *MemStorage) GetByID(id string) (*model.Metrics, error) {
+func (ms *MemStorage) GetByID(_ context.Context, id string) (*model.Metrics, error) {
 	m, exists := ms.data[id]
 	if !exists {
 		return nil, ErrMetricNotFound
@@ -60,7 +61,7 @@ func (ms *MemStorage) GetByID(id string) (*model.Metrics, error) {
 	return m, nil
 }
 
-func (ms *MemStorage) BatchUpdate(metrics []*model.Metrics) error {
+func (ms *MemStorage) BatchUpdate(ctx context.Context, metrics []*model.Metrics) error {
 	for _, m := range metrics {
 		old := ms.data[m.ID]
 		if old != nil && old.MType != m.MType {
@@ -71,15 +72,15 @@ func (ms *MemStorage) BatchUpdate(metrics []*model.Metrics) error {
 	for _, m := range metrics {
 		switch m.MType {
 		case model.Counter:
-			_ = ms.AddCounter(m.ID, *m.Delta)
+			_ = ms.AddCounter(ctx, m.ID, *m.Delta)
 		case model.Gauge:
-			_ = ms.SetGauge(m.ID, *m.Value)
+			_ = ms.SetGauge(ctx, m.ID, *m.Value)
 		}
 	}
 	return nil
 }
 
-func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {
+func (ms *MemStorage) GetAllSorted(_ context.Context) ([]*model.Metrics, error) {
 	mlist := make([]*model.Metrics, 0, len(ms.data))
 	for _, v := range ms.data {
 		mlist = append(mlist, v)
@@ -90,14 +91,14 @@ func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {
 	return mlist, nil
 }
 
-func (ms *MemStorage) SetAll(metrics []*model.Metrics) error {
+func (ms *MemStorage) SetAll(_ context.Context, metrics []*model.Metrics) error {
 	for _, m := range metrics {
 		ms.data[m.ID] = model.NewMetrics(m.ID, m.MType, m.Delta, m.Value)
 	}
 	return nil
 }
 
-func (ms *MemStorage) ResetAll() error {
+func (ms *MemStorage) ResetAll(_ context.Context) error {
 	for _, m := range ms.data {
 		m.Reset()
 	}

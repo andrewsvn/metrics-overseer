@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,7 @@ func NewFileStorage(cfg *servercfg.FileStorageConfig, logger *zap.Logger) *FileS
 	}
 
 	if cfg.RestoreOnStartup {
-		err := fst.load()
+		err := fst.load(context.Background())
 		if err != nil {
 			// this error should be encapsulated here since it doesn't affect the main flow
 			logger.Error("failed to load metrics on startup", zap.Error(err))
@@ -49,7 +50,7 @@ func NewFileStorage(cfg *servercfg.FileStorageConfig, logger *zap.Logger) *FileS
 		go func() {
 			for {
 				<-storeTicker.C
-				err := fst.store()
+				err := fst.store(context.Background())
 				if err != nil {
 					logger.Error("failed to store metrics", zap.Error(err))
 				}
@@ -61,20 +62,20 @@ func NewFileStorage(cfg *servercfg.FileStorageConfig, logger *zap.Logger) *FileS
 }
 
 func (fst *FileStorage) Close() error {
-	err := fst.store()
+	err := fst.store(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to store metrics on closing: %w", err)
 	}
 	return nil
 }
 
-func (fst *FileStorage) AddCounter(id string, value int64) error {
-	err := fst.MemStorage.AddCounter(id, value)
+func (fst *FileStorage) AddCounter(ctx context.Context, id string, value int64) error {
+	err := fst.MemStorage.AddCounter(ctx, id, value)
 	if err != nil {
 		return err
 	}
 	if fst.synchronous {
-		err := fst.store()
+		err := fst.store(context.Background())
 		if err != nil {
 			return fmt.Errorf("%w, reason: %s", ErrStore, err.Error())
 		}
@@ -82,13 +83,13 @@ func (fst *FileStorage) AddCounter(id string, value int64) error {
 	return nil
 }
 
-func (fst *FileStorage) SetGauge(id string, value float64) error {
-	err := fst.MemStorage.SetGauge(id, value)
+func (fst *FileStorage) SetGauge(ctx context.Context, id string, value float64) error {
+	err := fst.MemStorage.SetGauge(ctx, id, value)
 	if err != nil {
 		return err
 	}
 	if fst.synchronous {
-		err := fst.store()
+		err := fst.store(context.Background())
 		if err != nil {
 			return fmt.Errorf("%w, reason: %s", ErrStore, err.Error())
 		}
@@ -96,13 +97,13 @@ func (fst *FileStorage) SetGauge(id string, value float64) error {
 	return nil
 }
 
-func (fst *FileStorage) BatchUpdate(metrics []*model.Metrics) error {
-	err := fst.MemStorage.BatchUpdate(metrics)
+func (fst *FileStorage) BatchUpdate(ctx context.Context, metrics []*model.Metrics) error {
+	err := fst.MemStorage.BatchUpdate(ctx, metrics)
 	if err != nil {
 		return err
 	}
 	if fst.synchronous {
-		err := fst.store()
+		err := fst.store(context.Background())
 		if err != nil {
 			return fmt.Errorf("%w, reason: %s", ErrStore, err.Error())
 		}
@@ -110,7 +111,7 @@ func (fst *FileStorage) BatchUpdate(metrics []*model.Metrics) error {
 	return nil
 }
 
-func (fst *FileStorage) load() error {
+func (fst *FileStorage) load(ctx context.Context) error {
 	fst.logger.Infow("Loading metrics from file",
 		"filename", fst.filename,
 	)
@@ -124,7 +125,7 @@ func (fst *FileStorage) load() error {
 	if err != nil {
 		return fmt.Errorf("error unmarshalling metrics: %w", err)
 	}
-	err = fst.SetAll(metrics)
+	err = fst.SetAll(ctx, metrics)
 	if err != nil {
 		return fmt.Errorf("error storing metrics: %w", err)
 	}
@@ -132,12 +133,12 @@ func (fst *FileStorage) load() error {
 	return nil
 }
 
-func (fst *FileStorage) store() error {
+func (fst *FileStorage) store(ctx context.Context) error {
 	fst.logger.Infow("Storing metrics to file",
 		"filename", fst.filename,
 	)
 
-	metrics, err := fst.GetAllSorted()
+	metrics, err := fst.GetAllSorted(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting metrics to store: %w", err)
 	}

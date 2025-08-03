@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,7 +73,7 @@ func (mh *MetricsHandlers) showMetricsPage() http.HandlerFunc {
 		rw.Header().Add("Content-Type", "text/html")
 		rw.WriteHeader(http.StatusOK)
 
-		err := mh.msrv.GenerateAllMetricsHTML(rw)
+		err := mh.msrv.GenerateAllMetricsHTML(r.Context(), rw)
 		if err != nil {
 			mh.logger.Error(logErrorGenHTML, zap.Error(err))
 			http.Error(rw, "unable to render metrics page", http.StatusInternalServerError)
@@ -100,7 +101,7 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 			he.Render(rw)
 			return
 		}
-		he = mh.processUpdateMetric(metric)
+		he = mh.processUpdateMetric(r.Context(), metric)
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -138,7 +139,7 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 			he.Render(rw)
 			return
 		}
-		he = mh.processUpdateMetric(metric)
+		he = mh.processUpdateMetric(r.Context(), metric)
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -168,7 +169,7 @@ func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 		mh.logger.Debugw("Trying to update metrics",
 			"count", len(metrics),
 		)
-		err = mh.msrv.BatchSetMetrics(metrics)
+		err = mh.msrv.BatchSetMetrics(r.Context(), metrics)
 		if err != nil {
 			if errors.Is(err, model.ErrIncorrectAccess) {
 				NewValidationHandlerError(err.Error()).Render(rw)
@@ -188,7 +189,7 @@ func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 			zap.String("id", id),
 		)
 
-		metric, he := mh.getMetric(id, mtype)
+		metric, he := mh.getMetric(r.Context(), id, mtype)
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -218,7 +219,7 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 			"id", metric.ID,
 			"mtype", metric.MType,
 		)
-		metric, he := mh.getMetric(metric.ID, metric.MType)
+		metric, he := mh.getMetric(r.Context(), metric.ID, metric.MType)
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -248,14 +249,14 @@ func (mh *MetricsHandlers) pingDatabaseHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) processUpdateMetric(metric *model.Metrics) *HandlingError {
+func (mh *MetricsHandlers) processUpdateMetric(ctx context.Context, metric *model.Metrics) *HandlingError {
 	var err error
 
 	switch metric.MType {
 	case model.Counter:
-		err = mh.msrv.AccumulateCounter(metric.ID, *metric.Delta)
+		err = mh.msrv.AccumulateCounter(ctx, metric.ID, *metric.Delta)
 	case model.Gauge:
-		err = mh.msrv.SetGauge(metric.ID, *metric.Value)
+		err = mh.msrv.SetGauge(ctx, metric.ID, *metric.Value)
 	default:
 		return NewValidationHandlerError("unsupported metric type: " + metric.MType)
 	}
@@ -313,7 +314,7 @@ func (mh *MetricsHandlers) validateMetric(metric *model.Metrics) *HandlingError 
 	return nil
 }
 
-func (mh *MetricsHandlers) getMetric(id, mtype string) (*model.Metrics, *HandlingError) {
+func (mh *MetricsHandlers) getMetric(ctx context.Context, id, mtype string) (*model.Metrics, *HandlingError) {
 	if len(strings.TrimSpace(id)) == 0 {
 		return nil, NewValidationHandlerError("missing metric id")
 	}
@@ -321,7 +322,7 @@ func (mh *MetricsHandlers) getMetric(id, mtype string) (*model.Metrics, *Handlin
 		return nil, NewValidationHandlerError("unsupported metric type: " + mtype)
 	}
 
-	metric, err := mh.msrv.GetMetric(id, mtype)
+	metric, err := mh.msrv.GetMetric(ctx, id, mtype)
 	if err != nil {
 		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrIncorrectAccess) {
 			return nil, NewNotFoundHandlerError("metric not found")
