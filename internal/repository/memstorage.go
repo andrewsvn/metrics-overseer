@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -57,6 +58,20 @@ func (ms *MemStorage) GetByID(id string) (*model.Metrics, error) {
 		return nil, ErrMetricNotFound
 	}
 	return m, nil
+}
+
+func (ms *MemStorage) BatchUpdate(metrics []*model.Metrics) error {
+	for _, m := range metrics {
+		old := ms.data[m.ID]
+		if old != nil && old.MType != m.MType {
+			return fmt.Errorf("%w: for metric id=%s old type=%s, new type=%s",
+				model.ErrIncorrectAccess, m.ID, old.MType, m.MType)
+		}
+	}
+	for _, m := range metrics {
+		ms.data[m.ID] = m
+	}
+	return nil
 }
 
 func (ms *MemStorage) GetAllSorted() ([]*model.Metrics, error) {

@@ -41,43 +41,64 @@ func NewRestSender(addr string, logger *zap.Logger) (*RestSender, error) {
 	return rs, nil
 }
 
-func (rs RestSender) ValueSendFunc() MetricValueSendFunc {
-	return func(id string, mtype string, value string) error {
-		req, err := http.NewRequest(http.MethodPost, rs.composePostMetricByPathURL(id, mtype, value), nil)
-		if err != nil {
-			return fmt.Errorf("can't construct metric send request: %w", err)
-		}
-		req.Header.Add("Content-Type", "text/plain")
-
-		return rs.sendRequest(req)
+func (rs RestSender) SendMetricValue(id string, mtype string, value string) error {
+	req, err := http.NewRequest(http.MethodPost, rs.composePostMetricByPathURL(id, mtype, value), nil)
+	if err != nil {
+		return fmt.Errorf("can't construct metric send request: %w", err)
 	}
+	req.Header.Add("Content-Type", "text/plain")
+
+	return rs.sendRequest(req)
 }
 
-func (rs RestSender) StructSendFunc() MetricStructSendFunc {
-	return func(metric *model.Metrics) error {
-		body, err := json.Marshal(metric)
-		if err != nil {
-			return fmt.Errorf("can't construct metric send request: %w", err)
-		}
-
-		if rs.cwe != nil {
-			body, err = rs.cwe.WriteFlushed(body, 0)
-			if err != nil {
-				return fmt.Errorf("can't write compressed metric data: %w", err)
-			}
-		}
-
-		req, err := http.NewRequest(http.MethodPost, rs.addr+"/update", bytes.NewBufferString(string(body)))
-		if err != nil {
-			return fmt.Errorf("can't construct metric send request: %w", err)
-		}
-		req.Header.Add("Content-Type", "application/json")
-		if rs.cwe != nil {
-			rs.cwe.SetContentEncoding(req.Header)
-		}
-
-		return rs.sendRequest(req)
+func (rs RestSender) SendMetric(metric *model.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("can't construct metric update request: %w", err)
 	}
+
+	if rs.cwe != nil {
+		body, err = rs.cwe.WriteFlushed(body, 0)
+		if err != nil {
+			return fmt.Errorf("can't write compressed metric data: %w", err)
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodPost, rs.addr+"/update", bytes.NewBufferString(string(body)))
+	if err != nil {
+		return fmt.Errorf("can't send metric update request: %w", err)
+	}
+	req.Header.Add("Content-Type", "application/json")
+	if rs.cwe != nil {
+		rs.cwe.SetContentEncoding(req.Header)
+	}
+
+	return rs.sendRequest(req)
+}
+
+func (rs RestSender) SendMetricArray(metrics []*model.Metrics) error {
+	body, err := json.Marshal(metrics)
+	if err != nil {
+		return fmt.Errorf("can't construct metrics array update request: %w", err)
+	}
+
+	if rs.cwe != nil {
+		body, err = rs.cwe.WriteFlushed(body, 0)
+		if err != nil {
+			return fmt.Errorf("can't write compressed metrics data: %w", err)
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodPost, rs.addr+"/updates", bytes.NewBufferString(string(body)))
+	if err != nil {
+		return fmt.Errorf("can't send metrics array update request: %w", err)
+	}
+	req.Header.Add("Content-Type", "application/json")
+	if rs.cwe != nil {
+		rs.cwe.SetContentEncoding(req.Header)
+	}
+
+	return rs.sendRequest(req)
 }
 
 func (rs RestSender) sendRequest(req *http.Request) error {

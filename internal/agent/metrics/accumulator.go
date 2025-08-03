@@ -1,9 +1,10 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/agent/sender"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
+	"sync"
 )
 
 // Accumulator manages metric lifecycle between pollings and sendings
@@ -23,7 +24,17 @@ type MetricAccumulator struct {
 	MType  string
 	Delta  *int64
 	Values []float64
+
+	mutex        sync.Mutex
+	isStaged     bool
+	stagedDelta  int64
+	stagedValues []float64
 }
+
+var (
+	ErrUnknownMetricType = errors.New("unknown metric type")
+	ErrWrongStagingState = errors.New("incorrect operation for current staging state")
+)
 
 func NewMetricAccumulator(id string, mtype string) *MetricAccumulator {
 	return &MetricAccumulator{
@@ -36,6 +47,9 @@ func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 	if ma.MType != model.Counter {
 		return fmt.Errorf("%w: expected counter, got %v", model.ErrIncorrectAccess, ma.MType)
 	}
+
+	ma.mutex.Lock()
+	defer ma.mutex.Unlock()
 
 	if ma.Delta == nil {
 		ma.Delta = &inc
@@ -50,60 +64,112 @@ func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
 		return fmt.Errorf("%w: expected gauge, got %v", model.ErrIncorrectAccess, ma.MType)
 	}
 
+	ma.mutex.Lock()
+	defer ma.mutex.Unlock()
+
 	ma.Values = append(ma.Values, value)
 	return nil
 }
 
-func (ma *MetricAccumulator) ExtractAndSend(sendfunc sender.MetricStructSendFunc) error {
+// StageChanges prepares accumulated metric for sending to server
+// if no values were accumulated then nil is returned, so a caller must explicitly check the returned metric for nil
+func (ma *MetricAccumulator) StageChanges() (*model.Metrics, error) {
+	if ma.isStaged {
+		return nil, ErrWrongStagingState
+	}
+
+	ma.mutex.Lock()
+	defer ma.mutex.Unlock()
+
 	switch ma.MType {
 	case model.Counter:
-		return ma.extractAndSendCounter(sendfunc)
+		return ma.stageCounterChanges(), nil
 	case model.Gauge:
-		return ma.extractAndSendGauge(sendfunc)
-	default:
-		return fmt.Errorf("unknown metric type")
+		return ma.stageGaugeChanges(), nil
 	}
+	return nil, ErrUnknownMetricType
 }
 
-func (ma *MetricAccumulator) extractAndSendCounter(sendfunc sender.MetricStructSendFunc) error {
+func (ma *MetricAccumulator) stageCounterChanges() *model.Metrics {
 	if ma.Delta == nil {
 		return nil
 	}
 
-	total := *ma.Delta
-	err := sendfunc(model.NewMetrics(ma.ID, ma.MType, ma.Delta, nil))
-	if err != nil {
-		return fmt.Errorf("error sending accumulated metric id=%s value=%d to server: %w", ma.ID, total, err)
-	}
-
-	// if send is successful, remove sent values
-	if *ma.Delta == total {
-		ma.Delta = nil
-	} else {
-		*ma.Delta -= total
-	}
-	return nil
+	ma.isStaged = true
+	ma.stagedDelta = *ma.Delta
+	ma.Delta = nil
+	return model.NewMetrics(ma.ID, ma.MType, &ma.stagedDelta, nil)
 }
 
-func (ma *MetricAccumulator) extractAndSendGauge(sendfunc sender.MetricStructSendFunc) error {
+func (ma *MetricAccumulator) stageGaugeChanges() *model.Metrics {
 	if len(ma.Values) == 0 {
 		return nil
 	}
 
+	ma.isStaged = true
+	ma.stagedValues = append([]float64{}, ma.Values...)
+	ma.Values = ma.Values[:0]
+
 	// we take average value from accumulated metric values (suggestion: maybe use only last)
 	var total float64
-	count := len(ma.Values)
-	for _, v := range ma.Values {
+	count := len(ma.stagedValues)
+	for _, v := range ma.stagedValues {
 		total += v
 	}
 	total /= float64(count)
+	return model.NewMetrics(ma.ID, ma.MType, nil, &total)
+}
 
-	err := sendfunc(model.NewMetrics(ma.ID, ma.MType, nil, &total))
-	if err != nil {
-		return fmt.Errorf("error sending accumulated metric id=%s value=%f to server: %w", ma.ID, total, err)
+func (ma *MetricAccumulator) RollbackStaged() error {
+	if !ma.isStaged {
+		return nil
 	}
 
-	// if send is successful, remove sent values
-	ma.Values = ma.Values[count:]
+	ma.mutex.Lock()
+	defer ma.mutex.Unlock()
+
+	switch ma.MType {
+	case model.Counter:
+		ma.rollbackStagedCounter()
+	case model.Gauge:
+		ma.rollbackStagedGauge()
+	default:
+		ma.isStaged = false
+	}
+	return nil
+}
+
+func (ma *MetricAccumulator) rollbackStagedCounter() {
+	ma.isStaged = false
+	if ma.Delta == nil {
+		delta := ma.stagedDelta
+		ma.Delta = &delta
+	} else {
+		*ma.Delta += ma.stagedDelta
+	}
+	ma.stagedDelta = 0
+}
+
+func (ma *MetricAccumulator) rollbackStagedGauge() {
+	ma.isStaged = false
+	ma.Values = append(ma.stagedValues, ma.Values...)
+	ma.stagedValues = ma.stagedValues[:0]
+}
+
+func (ma *MetricAccumulator) CommitStaged() error {
+	if !ma.isStaged {
+		return ErrWrongStagingState
+	}
+
+	ma.mutex.Lock()
+	defer ma.mutex.Unlock()
+
+	switch ma.MType {
+	case model.Counter:
+		ma.stagedDelta = 0
+	case model.Gauge:
+		ma.stagedValues = ma.stagedValues[:0]
+	}
+	ma.isStaged = false
 	return nil
 }

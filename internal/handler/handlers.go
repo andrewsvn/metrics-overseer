@@ -52,6 +52,9 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r.Route("/update", func(r chi.Router) {
 		r.Post("/", mh.updateByBodyHandler())
 	})
+	r.Route("/updates", func(r chi.Router) {
+		r.Post("/", mh.updateBatchHandler())
+	})
 	r.Route("/value", func(r chi.Router) {
 		r.Post("/", mh.getJSONValueHandler())
 	})
@@ -83,8 +86,11 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
 		svalue := chi.URLParam(r, "value")
-		mh.logger.Info("Trying to update metric",
-			zap.String("mtype", mtype), zap.String("id", id), zap.String("value", svalue))
+		mh.logger.Debugw("Trying to update metric",
+			"mtype", mtype,
+			"id", id,
+			"value", svalue,
+		)
 
 		metric, he := mh.buildMetric(id, mtype, svalue)
 		if he != nil {
@@ -120,6 +126,10 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 			NewValidationHandlerError(fmt.Sprintf("error unmarshalling body: %v", err)).Render(rw)
 			return
 		}
+
+		mh.logger.Debugw("Trying to update metric",
+			"metric", metric,
+		)
 		he := mh.validateMetric(metric)
 		if he != nil {
 			if he.Error != nil {
@@ -141,11 +151,42 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	}
 }
 
+func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		body, err := mh.decomp.ReadRequestBody(r)
+		if err != nil {
+			NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+			return
+		}
+
+		metrics := make([]*model.Metrics, 0)
+		if err := json.Unmarshal(body, &metrics); err != nil {
+			NewValidationHandlerError(fmt.Sprintf("error unmarshalling body: %v", err)).Render(rw)
+			return
+		}
+
+		mh.logger.Debugw("Trying to update metrics",
+			"count", len(metrics),
+		)
+		err = mh.msrv.BatchSetMetrics(metrics)
+		if err != nil {
+			if errors.Is(err, model.ErrIncorrectAccess) {
+				NewValidationHandlerError(err.Error()).Render(rw)
+				return
+			}
+		}
+		rw.WriteHeader(http.StatusOK)
+	}
+}
+
 func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
 		id := chi.URLParam(r, "id")
-		mh.logger.Info("Fetching metric", zap.String("mtype", mtype), zap.String("id", id))
+		mh.logger.Debug("Fetching metric",
+			zap.String("mtype", mtype),
+			zap.String("id", id),
+		)
 
 		metric, he := mh.getMetric(id, mtype)
 		if he != nil {
@@ -173,6 +214,10 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 			return
 		}
 
+		mh.logger.Debugw("Fetching metric",
+			"id", metric.ID,
+			"mtype", metric.MType,
+		)
 		metric, he := mh.getMetric(metric.ID, metric.MType)
 		if he != nil {
 			if he.Error != nil {

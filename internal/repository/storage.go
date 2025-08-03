@@ -19,10 +19,14 @@ type Storage interface {
 
 	GetByID(id string) (*model.Metrics, error)
 
+	// BatchUpdate allows receiving multiple metrics values and store them simultaneously
+	// if any metric is invalid, all data is discarded, and an error returned on the validation step
+	BatchUpdate([]*model.Metrics) error
+
 	// GetAllSorted should return the full list of metrics sorted by ID lexicographically
 	GetAllSorted() ([]*model.Metrics, error)
 
-	// SetAll allows to bulk set data from an external source
+	// SetAll allows to bulk set data from an external source (no validations performed)
 	SetAll(metrics []*model.Metrics) error
 
 	ResetAll() error

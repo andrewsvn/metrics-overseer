@@ -96,6 +96,20 @@ func (fst *FileStorage) SetGauge(id string, value float64) error {
 	return nil
 }
 
+func (fst *FileStorage) BatchUpdate(metrics []*model.Metrics) error {
+	err := fst.MemStorage.BatchUpdate(metrics)
+	if err != nil {
+		return err
+	}
+	if fst.synchronous {
+		err := fst.store()
+		if err != nil {
+			return fmt.Errorf("%w, reason: %s", ErrStore, err.Error())
+		}
+	}
+	return nil
+}
+
 func (fst *FileStorage) load() error {
 	fst.logger.Infow("Loading metrics from file",
 		"filename", fst.filename,

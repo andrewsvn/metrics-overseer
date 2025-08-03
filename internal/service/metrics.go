@@ -64,6 +64,10 @@ func (ms *MetricsService) GetMetric(id, mtype string) (*model.Metrics, error) {
 	return metric, nil
 }
 
+func (ms *MetricsService) BatchSetMetrics(metrics []*model.Metrics) error {
+	return ms.storage.BatchUpdate(metrics)
+}
+
 func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 	if ms.allMetricsTmpl == nil {
 		tmpl := template.New("metricspage")

@@ -40,7 +40,7 @@ func (pgs *PostgresDBStorage) SetGauge(id string, value float64) error {
 		Values(id, model.Gauge, value).
 		Suffix(`
             ON CONFLICT (id) DO UPDATE
-            SET value = COALESCE(metrics.value, 0)
+            SET value = EXCLUDED.value
             WHERE metrics.mtype = '` + model.Gauge + `'`).
 		ToSql()
 	if err != nil {
@@ -116,26 +116,12 @@ func (pgs *PostgresDBStorage) GetByID(id string) (*model.Metrics, error) {
 	return model.NewMetrics(id, mtype, delta, value), nil
 }
 
-func (pgs *PostgresDBStorage) SetByID(metric *model.Metrics) error {
-	query, args, err := pgs.sqrl.Insert("metrics").
-		Columns("id", "mtype", "delta", "value").
-		Values(metric.ID, metric.MType, metric.Delta, metric.Value).
-		Suffix(`
-            ON CONFLICT (id) DO UPDATE
-            SET mtype = EXCLUDED.mtype,
-                delta = EXCLUDED.delta,
-                value = EXCLUDED.value
-        `).
-		ToSql()
+func (pgs *PostgresDBStorage) BatchUpdate(metrics []*model.Metrics) error {
+	err := pgs.batchValidate(metrics)
 	if err != nil {
-		return fmt.Errorf("failed to compose set metric query: %w", err)
+		return err
 	}
-
-	pgs.logger.Debugw("set metric by ID query", "query", query, "args", args)
-	if _, err := pgs.pool.Exec(context.Background(), query, args...); err != nil {
-		return fmt.Errorf("failed to set metric: %w", err)
-	}
-	return nil
+	return pgs.batchSet(metrics)
 }
 
 func (pgs *PostgresDBStorage) GetAllSorted() ([]*model.Metrics, error) {
@@ -173,25 +159,7 @@ func (pgs *PostgresDBStorage) GetAllSorted() ([]*model.Metrics, error) {
 }
 
 func (pgs *PostgresDBStorage) SetAll(metrics []*model.Metrics) error {
-	builder := pgs.sqrl.Insert("metrics").Columns("id", "mtype", "delta", "value")
-	for _, m := range metrics {
-		builder = builder.Values(m.ID, m.MType, m.Delta, m.Value)
-	}
-	query, args, err := builder.Suffix(`
-            ON CONFLICT (id) DO UPDATE
-            SET mtype = EXCLUDED.mtype,
-                delta = EXCLUDED.delta,
-                value = EXCLUDED.value
-        `).ToSql()
-	if err != nil {
-		return fmt.Errorf("failed to compose set all metrics query: %w", err)
-	}
-
-	pgs.logger.Debugw("set all metrics query", "query", query, "args", args)
-	if _, err := pgs.pool.Exec(context.Background(), query, args...); err != nil {
-		return fmt.Errorf("failed to set all metrics: %w", err)
-	}
-	return nil
+	return pgs.BatchUpdate(metrics)
 }
 
 func (pgs *PostgresDBStorage) ResetAll() error {
@@ -204,4 +172,77 @@ func (pgs *PostgresDBStorage) ResetAll() error {
 func (pgs *PostgresDBStorage) Close() error {
 	pgs.pool.Close()
 	return nil
+}
+
+func (pgs *PostgresDBStorage) batchValidate(metrics []*model.Metrics) error {
+	query, args, err := pgs.sqrl.Select("id", "mtype").From("metrics").ToSql()
+	if err != nil {
+		return fmt.Errorf("failed to compose get metric types query: %w", err)
+	}
+
+	pgs.logger.Debugw("batch get metric query", "query", query, "args", args)
+	rows, err := pgs.pool.Query(context.Background(), query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to get metric types: %w", err)
+	}
+	defer rows.Close()
+
+	mtypes := make(map[string]string)
+	for rows.Next() {
+		var id string
+		var mtype string
+		if err := rows.Scan(&id, &mtype); err != nil {
+			return fmt.Errorf("failed to read metric type: %w", err)
+		}
+		mtypes[id] = mtype
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to read metric types: %w", err)
+	}
+
+	for _, metric := range metrics {
+		mtype, ok := mtypes[metric.ID]
+		if ok && metric.MType != mtype {
+			return fmt.Errorf("%w: for metric id=%s expected=%s, actual=%s",
+				model.ErrIncorrectAccess, metric.ID, mtype, metric.MType)
+		}
+	}
+	return nil
+}
+
+func (pgs *PostgresDBStorage) batchSet(metrics []*model.Metrics) error {
+	tx, err := pgs.pool.BeginTx(context.Background(), pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to initialize DB transaction: %w", err)
+	}
+	defer func() {
+		err := tx.Rollback(context.Background())
+		if err != nil {
+			pgs.logger.Warnw("failed to rollback transaction",
+				"err", err,
+			)
+		}
+	}()
+
+	for _, m := range metrics {
+		query, args, err := pgs.sqrl.Insert("metrics").
+			Columns("id", "mtype", "delta", "value").
+			Values(m.ID, m.MType, m.Delta, m.Value).
+			Suffix(`
+				ON CONFLICT (id) DO UPDATE
+				SET mtype = EXCLUDED.mtype,
+					delta = COALESCE(metrics.delta, 0) + EXCLUDED.delta,
+					value = EXCLUDED.value
+        	`).
+			ToSql()
+		if err != nil {
+			return fmt.Errorf("failed to compose set metrics query: %w", err)
+		}
+
+		if _, err := tx.Exec(context.Background(), query, args...); err != nil {
+			return fmt.Errorf("failed to set metrics: %w", err)
+		}
+	}
+
+	return tx.Commit(context.Background())
 }

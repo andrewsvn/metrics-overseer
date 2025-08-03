@@ -120,13 +120,38 @@ func (a *Agent) report(tc <-chan time.Time) {
 
 func (a *Agent) execReport() {
 	a.logger.Info("Reporting metrics to server")
-	for name, ma := range a.accums {
-		err := ma.ExtractAndSend(a.sndr.StructSendFunc())
+	marray := make([]*model.Metrics, 0, len(a.accums))
+	for _, ma := range a.accums {
+		metric, err := ma.StageChanges()
 		if err != nil {
-			a.logger.Errorw("unable to send metric to server",
-				"metric", name,
-				"reason", err.Error(),
+			a.logger.Errorw("unable to stage metric for sending",
+				"metric", ma.ID,
+				"error", err,
 			)
+			continue
+		}
+		defer func(ma *metrics.MetricAccumulator) {
+			_ = ma.RollbackStaged()
+		}(ma)
+
+		if metric != nil {
+			marray = append(marray, metric)
+		}
+	}
+
+	err := a.sndr.SendMetricArray(marray)
+	if err != nil {
+		a.logger.Errorw("unable to send metrics to server",
+			"error", err,
+		)
+	}
+
+	for _, m := range marray {
+		err := a.accums[m.ID].CommitStaged()
+		if err != nil {
+			a.logger.Errorw("unable to commit staged metric",
+				"metric", m.ID,
+				"error", err)
 		}
 	}
 }
