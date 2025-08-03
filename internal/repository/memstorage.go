@@ -69,7 +69,12 @@ func (ms *MemStorage) BatchUpdate(metrics []*model.Metrics) error {
 		}
 	}
 	for _, m := range metrics {
-		ms.data[m.ID] = m
+		switch m.MType {
+		case model.Counter:
+			_ = ms.AddCounter(m.ID, *m.Delta)
+		case model.Gauge:
+			_ = ms.SetGauge(m.ID, *m.Value)
+		}
 	}
 	return nil
 }

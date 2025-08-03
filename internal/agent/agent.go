@@ -144,6 +144,7 @@ func (a *Agent) execReport() {
 		a.logger.Errorw("unable to send metrics to server",
 			"error", err,
 		)
+		return
 	}
 
 	for _, m := range marray {
