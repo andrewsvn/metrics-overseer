@@ -6,23 +6,51 @@ import (
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
 
 type PostgresDBStorage struct {
-	pool   *pgxpool.Pool
-	logger *zap.SugaredLogger
-	sqrl   squirrel.StatementBuilderType
+	pool    *pgxpool.Pool
+	sqrl    squirrel.StatementBuilderType
+	retrier *retrying.Executor
+	logger  *zap.SugaredLogger
 }
 
-func NewPostgresDBStorage(pool *pgxpool.Pool, logger *zap.Logger) *PostgresDBStorage {
+func isPgErrorRetryable(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+
+	switch pgErr.Code {
+	// Class 08
+	case pgerrcode.ConnectionException,
+		pgerrcode.ConnectionDoesNotExist,
+		pgerrcode.ConnectionFailure:
+		return true
+	}
+
+	return false
+}
+
+func NewPostgresDBStorage(pool *pgxpool.Pool, logger *zap.Logger, retryPolicy retrying.Policy) *PostgresDBStorage {
 	pgLogger := logger.Sugar().With(zap.String("component", "postgres-storage"))
+
+	retrier := retrying.NewExecutorBuilder(retryPolicy).
+		WithLogger(pgLogger, "executing query").
+		WithRetryablePredicate(isPgErrorRetryable).
+		Executor()
+
 	return &PostgresDBStorage{
-		pool:   pool,
-		logger: pgLogger,
-		sqrl:   squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
+		pool:    pool,
+		sqrl:    squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
+		retrier: retrier,
+		logger:  pgLogger,
 	}
 }
 
@@ -47,10 +75,18 @@ func (pgs *PostgresDBStorage) SetGauge(ctx context.Context, id string, value flo
 		return fmt.Errorf("failed to compose set metric query: %w", err)
 	}
 
-	pgs.logger.Debugw("set gauge query", "query", query, "args", args)
-	res, err := pgs.pool.Exec(ctx, query, args...)
+	var res pgconn.CommandTag
+	err = pgs.retrier.Run(func() error {
+		pgs.logger.Debugw("set gauge query", "query", query, "args", args)
+		var err error
+		res, err = pgs.pool.Exec(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("failed to execute set gauge query: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to execute set gauge query: %w", err)
+		return err
 	}
 
 	if res.RowsAffected() == 0 {
@@ -80,10 +116,18 @@ func (pgs *PostgresDBStorage) AddCounter(ctx context.Context, id string, delta i
 		return fmt.Errorf("failed to compose set metric query: %w", err)
 	}
 
-	pgs.logger.Debugw("add counter query", "query", query, "args", args)
-	res, err := pgs.pool.Exec(ctx, query, args...)
+	var res pgconn.CommandTag
+	err = pgs.retrier.Run(func() error {
+		pgs.logger.Debugw("add counter query", "query", query, "args", args)
+		var err error
+		res, err = pgs.pool.Exec(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("failed to execute add counter query: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to execute add counter query: %w", err)
+		return err
 	}
 
 	if res.RowsAffected() == 0 {
@@ -101,27 +145,39 @@ func (pgs *PostgresDBStorage) GetByID(ctx context.Context, id string) (*model.Me
 		return nil, fmt.Errorf("failed to compose get metric query: %w", err)
 	}
 
-	pgs.logger.Debugw("get metric by ID query", "query", query, "args", args)
-	row := pgs.pool.QueryRow(ctx, query, args...)
 	var mtype string
 	var delta *int64
 	var value *float64
-	if err := row.Scan(&mtype, &delta, &value); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrMetricNotFound
-		}
-		return nil, fmt.Errorf("failed to extract metric from DB row: %w", err)
-	}
 
+	err = pgs.retrier.Run(func() error {
+		pgs.logger.Debugw("get metric by ID query", "query", query, "args", args)
+		row := pgs.pool.QueryRow(ctx, query, args...)
+		if err := row.Scan(&mtype, &delta, &value); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrMetricNotFound
+			}
+			return fmt.Errorf("failed to extract metric from DB row: %w", err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
 	return model.NewMetrics(id, mtype, delta, value), nil
 }
 
 func (pgs *PostgresDBStorage) BatchUpdate(ctx context.Context, metrics []*model.Metrics) error {
-	err := pgs.batchValidate(ctx, metrics)
+	err := pgs.retrier.Run(func() error {
+		return pgs.batchValidate(ctx, metrics)
+	})
 	if err != nil {
 		return err
 	}
-	return pgs.batchSet(ctx, metrics)
+
+	return pgs.retrier.Run(func() error {
+		return pgs.batchSet(ctx, metrics)
+	})
 }
 
 func (pgs *PostgresDBStorage) GetAllSorted(ctx context.Context) ([]*model.Metrics, error) {
@@ -133,27 +189,36 @@ func (pgs *PostgresDBStorage) GetAllSorted(ctx context.Context) ([]*model.Metric
 		return nil, fmt.Errorf("failed to compose get all metrics query: %w", err)
 	}
 
-	pgs.logger.Debugw("get all metrics query", "query", query, "args", args)
-	rows, err := pgs.pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute get all metrics query: %w", err)
-	}
-	defer rows.Close()
+	var metrics []*model.Metrics
 
-	metrics := make([]*model.Metrics, 0)
-	for rows.Next() {
-		var id string
-		var mtype string
-		var delta *int64
-		var value *float64
-		err := rows.Scan(&id, &mtype, &delta, &value)
+	err = pgs.retrier.Run(func() error {
+		pgs.logger.Debugw("get all metrics query", "query", query, "args", args)
+		rows, err := pgs.pool.Query(ctx, query, args...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract metrics from DB row: %w", err)
+			return fmt.Errorf("failed to execute get all metrics query: %w", err)
 		}
-		metrics = append(metrics, model.NewMetrics(id, mtype, delta, value))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to extract all metrics from DB rows: %w", err)
+		defer rows.Close()
+
+		metrics = make([]*model.Metrics, 0)
+		for rows.Next() {
+			var id string
+			var mtype string
+			var delta *int64
+			var value *float64
+			err := rows.Scan(&id, &mtype, &delta, &value)
+			if err != nil {
+				return fmt.Errorf("failed to extract metrics from DB row: %w", err)
+			}
+			metrics = append(metrics, model.NewMetrics(id, mtype, delta, value))
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to extract all metrics from DB rows: %w", err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 	return metrics, nil
 }
@@ -163,10 +228,12 @@ func (pgs *PostgresDBStorage) SetAll(ctx context.Context, metrics []*model.Metri
 }
 
 func (pgs *PostgresDBStorage) ResetAll(ctx context.Context) error {
-	if _, err := pgs.pool.Exec(ctx, "TRUNCATE TABLE metrics"); err != nil {
-		return fmt.Errorf("failed to truncate all metrics table: %w", err)
-	}
-	return nil
+	return pgs.retrier.Run(func() error {
+		if _, err := pgs.pool.Exec(ctx, "TRUNCATE TABLE metrics"); err != nil {
+			return fmt.Errorf("failed to truncate all metrics table: %w", err)
+		}
+		return nil
+	})
 }
 
 func (pgs *PostgresDBStorage) Close() error {
@@ -217,7 +284,7 @@ func (pgs *PostgresDBStorage) batchSet(ctx context.Context, metrics []*model.Met
 	}
 	defer func() {
 		err := tx.Rollback(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			pgs.logger.Warnw("failed to rollback transaction",
 				"err", err,
 			)

@@ -8,12 +8,14 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -59,7 +61,12 @@ func run() error {
 func initializeStorage(cfg *servercfg.Config, dbconn *db.PostgresDB, logger *zap.Logger) repository.Storage {
 	if dbconn != nil {
 		logger.Info("initializing postgres storage")
-		return repository.NewPostgresDBStorage(dbconn.Pool(), logger)
+		policy := retrying.NewLinearPolicy(
+			cfg.MaxRetryCount,
+			time.Duration(cfg.InitialRetryDelaySec)*time.Second,
+			time.Duration(cfg.RetryDelayIncrementSec)*time.Second,
+		)
+		return repository.NewPostgresDBStorage(dbconn.Pool(), logger, policy)
 	}
 
 	if cfg.FileStorageConfig.IsSetUp() {
@@ -71,22 +78,22 @@ func initializeStorage(cfg *servercfg.Config, dbconn *db.PostgresDB, logger *zap
 	return repository.NewMemStorage()
 }
 
-func initializeDB(cfg *servercfg.DatabaseConfig, logger *zap.Logger) (*db.PostgresDB, error) {
-	if !cfg.IsSetUp() {
+func initializeDB(dbcfg *servercfg.DatabaseConfig, logger *zap.Logger) (*db.PostgresDB, error) {
+	if !dbcfg.IsSetUp() {
 		return nil, nil
 	}
 
-	err := migrations.MigrateDB(cfg, logger)
+	err := migrations.MigrateDB(dbcfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	dbconn, err := db.NewPostgresDB(context.Background(), cfg)
+	dbconn, err := db.NewPostgresDB(context.Background(), dbcfg)
 	if err != nil {
 		return nil, fmt.Errorf("can't create postgres database connection pool: %w", err)
 	}
 
 	logger.Sugar().Infow("initialized postgres database connection pool",
-		"DSN", cfg.DBConnString)
+		"DSN", dbcfg.DBConnString)
 	return dbconn, nil
 }

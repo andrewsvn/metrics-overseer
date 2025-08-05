@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"go.uber.org/zap"
 	"math/rand"
 	"os"
@@ -23,19 +24,26 @@ type Agent struct {
 
 	accums map[string]*metrics.MetricAccumulator
 	sndr   sender.MetricSender
+
 	logger *zap.SugaredLogger
 }
 
 func NewAgent(cfg *agentcfg.Config, logger *zap.Logger) (*Agent, error) {
 	agentLogger := logger.Sugar().With(zap.String("component", "agent"))
 
+	reportRetryPolicy := retrying.NewLinearPolicy(
+		cfg.MaxRetryCount,
+		time.Duration(cfg.InitialRetryDelaySec)*time.Second,
+		time.Duration(cfg.RetryDelayIncrementSec)*time.Second,
+	)
+
 	serverAddr := strings.Trim(cfg.ServerAddr, "\"")
-	sndr, err := sender.NewRestSender(serverAddr, agentLogger.Desugar())
+	sndr, err := sender.NewRestSender(serverAddr, logger, reportRetryPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("can't construct agent from config: %w", err)
 	}
 
-	agentLogger.Infow("Initializing metrics-overseer agent",
+	agentLogger.Infow("initializing metrics-overseer agent",
 		"poll interval (sec)", cfg.PollIntervalSec,
 		"report interval (sec)", cfg.ReportIntervalSec)
 
@@ -45,13 +53,14 @@ func NewAgent(cfg *agentcfg.Config, logger *zap.Logger) (*Agent, error) {
 
 		accums: make(map[string]*metrics.MetricAccumulator),
 		sndr:   sndr,
+
 		logger: agentLogger,
 	}
 	return a, nil
 }
 
 func (a *Agent) Run() {
-	a.logger.Info("Starting metrics-overseer agent")
+	a.logger.Info("starting metrics-overseer agent")
 
 	pollTicker := time.NewTicker(a.pollInterval)
 	reportTicker := time.NewTicker(a.reportInterval)
@@ -63,7 +72,7 @@ func (a *Agent) Run() {
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
 
-	a.logger.Info("Shutting down metrics-overseer agent")
+	a.logger.Info("shutting down metrics-overseer agent")
 }
 
 func (a *Agent) poll(tc <-chan time.Time) {
@@ -74,7 +83,7 @@ func (a *Agent) poll(tc <-chan time.Time) {
 }
 
 func (a *Agent) execPoll() {
-	a.logger.Info("Polling metrics")
+	a.logger.Info("polling metrics")
 
 	ms := runtime.MemStats{}
 	runtime.ReadMemStats(&ms)
@@ -119,7 +128,7 @@ func (a *Agent) report(tc <-chan time.Time) {
 }
 
 func (a *Agent) execReport() {
-	a.logger.Info("Reporting metrics to server")
+	a.logger.Info("reporting metrics to server")
 	marray := make([]*model.Metrics, 0, len(a.accums))
 	for _, ma := range a.accums {
 		metric, err := ma.StageChanges()

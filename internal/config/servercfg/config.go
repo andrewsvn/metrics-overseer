@@ -30,9 +30,17 @@ func (dbcfg *DatabaseConfig) IsSetUp() bool {
 	return dbcfg.DBConnString != ""
 }
 
+type PostgresRetryConfig struct {
+	MaxRetryCount          int `env:"PG_MAX_RETRY_COUNT" envDefault:"3"`
+	InitialRetryDelaySec   int `env:"PG_INITIAL_RETRY_DELAY" envDefault:"1"`
+	RetryDelayIncrementSec int `env:"PG_RETRY_DELAY_INCREMENT" envDefault:"2"`
+}
+
 type Config struct {
 	FileStorageConfig
 	DatabaseConfig
+	PostgresRetryConfig
+
 	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
 	Addr     string `env:"ADDRESS"`
 }

@@ -22,7 +22,9 @@ type MetricsHandlers struct {
 	msrv   *service.MetricsService
 	dbconn db.Connection
 	decomp *compress.Decompressor
-	logger *zap.SugaredLogger
+
+	baseLogger *zap.Logger
+	logger     *zap.SugaredLogger
 }
 
 const (
@@ -32,12 +34,14 @@ const (
 
 func NewMetricsHandlers(ms *service.MetricsService, dbconn db.Connection,
 	logger *zap.Logger) *MetricsHandlers {
+
 	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
 	return &MetricsHandlers{
-		msrv:   ms,
-		dbconn: dbconn,
-		decomp: compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
-		logger: mhLogger,
+		msrv:       ms,
+		dbconn:     dbconn,
+		decomp:     compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
+		baseLogger: logger,
+		logger:     mhLogger,
 	}
 }
 
@@ -45,8 +49,8 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(
-		middleware.NewHTTPLogging(mh.logger.Desugar()).Middleware,
-		middleware.NewCompressing(mh.logger.Desugar()).Middleware,
+		middleware.NewHTTPLogging(mh.baseLogger).Middleware,
+		middleware.NewCompressing(mh.baseLogger).Middleware,
 	)
 
 	r.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
