@@ -89,3 +89,7 @@ func (ms *MetricsService) GenerateAllMetricsHTML(ctx context.Context, w io.Write
 	}
 	return ms.allMetricsTmpl.Execute(w, page)
 }
+
+func (ms *MetricsService) PingStorage(ctx context.Context) error {
+	return ms.storage.Ping(ctx)
+}

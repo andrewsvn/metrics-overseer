@@ -7,6 +7,17 @@ type Policy interface {
 	NextDelay(lastDelay time.Duration) time.Duration
 }
 
+// NoRetryPolicy doesn't allow retrying
+type NoRetryPolicy struct{}
+
+func (*NoRetryPolicy) MaxAttempts() int {
+	return 0
+}
+
+func (*NoRetryPolicy) NextDelay(_ time.Duration) time.Duration {
+	return 0
+}
+
 // LinearPolicy performs retries up to max number, starting with initialDelay interval between reties and increasing it
 // linearly by a fixed duration
 type LinearPolicy struct {

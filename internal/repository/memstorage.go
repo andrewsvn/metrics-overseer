@@ -105,6 +105,11 @@ func (ms *MemStorage) ResetAll(_ context.Context) error {
 	return nil
 }
 
+func (ms *MemStorage) Ping(_ context.Context) error {
+	// memory storage is always available
+	return nil
+}
+
 func (ms *MemStorage) Close() error {
 	return nil
 }

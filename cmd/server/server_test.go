@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
-	"github.com/andrewsvn/metrics-overseer/internal/db/mocks"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
-	"github.com/golang/mock/gomock"
+	"github.com/andrewsvn/metrics-overseer/internal/mocks"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -102,10 +104,7 @@ func TestUpdateByPathHandler(t *testing.T) {
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	srv := setupServer(mocks.NewMockConnection(ctrl))
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -187,10 +186,7 @@ func TestUpdateValueByJSONHandler(t *testing.T) {
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	srv := setupServer(mocks.NewMockConnection(ctrl))
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -291,10 +287,7 @@ func TestGetPlainValueHandler(t *testing.T) {
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	srv := setupServer(mocks.NewMockConnection(ctrl))
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -409,10 +402,7 @@ func TestGetJSONValueHandler(t *testing.T) {
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	srv := setupServer(mocks.NewMockConnection(ctrl))
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -443,10 +433,7 @@ func getJSONValueHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Se
 }
 
 func TestGetAllMetricsPage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	srv := setupServer(mocks.NewMockConnection(ctrl))
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
@@ -470,14 +457,13 @@ func TestGetAllMetricsPage(t *testing.T) {
 }
 
 func TestDBConnectionPing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	mconn := new(mocks.MockConnection)
+	mconn.EXPECT().Pool().Return(&pgxpool.Pool{})
 
-	mconn := mocks.NewMockConnection(ctrl)
-	mconn.EXPECT().Ping(gomock.Any()).Return(nil).Times(1)
-
-	srv := setupServer(mconn)
+	srv := setupServerWithDummyDBStorage(mconn)
 	defer srv.Close()
+
+	mconn.EXPECT().Ping(mock.Anything).Return(nil).Once()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/ping", nil)
 	require.NoError(t, err)
@@ -489,7 +475,7 @@ func TestDBConnectionPing(t *testing.T) {
 	}()
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
-	mconn.EXPECT().Ping(gomock.Any()).Return(fmt.Errorf("no connection")).Times(1)
+	mconn.EXPECT().Ping(mock.Anything).Return(fmt.Errorf("no connection")).Once()
 
 	res2, err := srv.Client().Do(req)
 	require.NoError(t, err)
@@ -499,7 +485,7 @@ func TestDBConnectionPing(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, res2.StatusCode)
 }
 
-func setupServer(conn db.Connection) *httptest.Server {
+func setupServerWithMemStorage() *httptest.Server {
 	ctx := context.Background()
 	logger, _ := logging.NewZapLogger("info")
 
@@ -507,7 +493,17 @@ func setupServer(conn db.Connection) *httptest.Server {
 	msrv := service.NewMetricsService(mstor)
 	_ = msrv.AccumulateCounter(ctx, "cnt1", 10)
 	_ = msrv.SetGauge(ctx, "gauge1", 3.14)
-	mhandlers := handler.NewMetricsHandlers(msrv, conn, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+
+	return httptest.NewServer(mhandlers.GetRouter())
+}
+
+func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
+	logger, _ := logging.NewZapLogger("info")
+
+	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
+	msrv := service.NewMetricsService(mstor)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }

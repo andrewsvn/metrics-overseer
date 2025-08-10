@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
-	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
@@ -20,7 +19,6 @@ import (
 
 type MetricsHandlers struct {
 	msrv   *service.MetricsService
-	dbconn db.Connection
 	decomp *compress.Decompressor
 
 	baseLogger *zap.Logger
@@ -32,13 +30,11 @@ const (
 	logErrorGenHTML   = "error generating metrics html"
 )
 
-func NewMetricsHandlers(ms *service.MetricsService, dbconn db.Connection,
-	logger *zap.Logger) *MetricsHandlers {
+func NewMetricsHandlers(ms *service.MetricsService, logger *zap.Logger) *MetricsHandlers {
 
 	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
 	return &MetricsHandlers{
 		msrv:       ms,
-		dbconn:     dbconn,
 		decomp:     compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
 		baseLogger: logger,
 		logger:     mhLogger,
@@ -64,7 +60,7 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 		r.Post("/", mh.getJSONValueHandler())
 	})
 	r.Route("/ping", func(r chi.Router) {
-		r.Get("/", mh.pingDatabaseHandler())
+		r.Get("/", mh.pingStorageHandler())
 	})
 	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
 	r.Get("/", mh.showMetricsPage())
@@ -235,17 +231,11 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) pingDatabaseHandler() http.HandlerFunc {
+func (mh *MetricsHandlers) pingStorageHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if mh.dbconn == nil {
-			mh.logger.Error("database connection not set up - unable to ping")
-			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		err := mh.dbconn.Ping(r.Context())
+		err := mh.msrv.PingStorage(r.Context())
 		if err != nil {
-			mh.logger.Error("failed to ping postgres database connection", zap.Error(err))
+			mh.logger.Error("failed to ping storage", zap.Error(err))
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}

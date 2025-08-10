@@ -32,6 +32,8 @@ type Storage interface {
 
 	ResetAll(ctx context.Context) error
 
+	Ping(ctx context.Context) error
+
 	Close() error
 }
 

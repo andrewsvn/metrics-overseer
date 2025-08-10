@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/golang-migrate/migrate/v4"
@@ -26,7 +27,11 @@ func MigrateDB(cfg *servercfg.DatabaseConfig, logger *zap.Logger) error {
 
 	err = m.Up()
 	if err != nil {
-		logger.Sugar().Infow("database migration returned", "result", err.Error())
+		if errors.Is(err, migrate.ErrNoChange) {
+			logger.Sugar().Info("database schema is up to date")
+		} else {
+			return err
+		}
 	}
 	return nil
 }

@@ -1,21 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
-	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
-	"github.com/andrewsvn/metrics-overseer/internal/repository"
-	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/andrewsvn/metrics-overseer/internal/server"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
-	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -33,13 +28,10 @@ func run() error {
 		return fmt.Errorf("can't initialize logger: %w", err)
 	}
 
-	dbconn, err := initializeDB(&cfg.DatabaseConfig, logger)
+	stor, err := server.InitializeStorage(cfg, logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't initialize storage: %w", err)
 	}
-	// no need to close here since postgres repository will handle this
-
-	stor := initializeStorage(cfg, dbconn, logger)
 	defer func() {
 		err := stor.Close()
 		if err != nil {
@@ -48,7 +40,7 @@ func run() error {
 	}()
 
 	msrv := service.NewMetricsService(stor)
-	mhandlers := handler.NewMetricsHandlers(msrv, dbconn, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 	r := mhandlers.GetRouter()
 
 	addr := strings.Trim(cfg.Addr, "\"")
@@ -56,44 +48,4 @@ func run() error {
 		"address", addr,
 	)
 	return http.ListenAndServe(addr, r)
-}
-
-func initializeStorage(cfg *servercfg.Config, dbconn *db.PostgresDB, logger *zap.Logger) repository.Storage {
-	if dbconn != nil {
-		logger.Info("initializing postgres storage")
-		policy := retrying.NewLinearPolicy(
-			cfg.MaxRetryCount,
-			time.Duration(cfg.InitialRetryDelaySec)*time.Second,
-			time.Duration(cfg.RetryDelayIncrementSec)*time.Second,
-		)
-		return repository.NewPostgresDBStorage(dbconn.Pool(), logger, policy)
-	}
-
-	if cfg.FileStorageConfig.IsSetUp() {
-		logger.Info("initializing file storage")
-		return repository.NewFileStorage(&cfg.FileStorageConfig, logger)
-	}
-
-	logger.Info("initializing memory storage")
-	return repository.NewMemStorage()
-}
-
-func initializeDB(dbcfg *servercfg.DatabaseConfig, logger *zap.Logger) (*db.PostgresDB, error) {
-	if !dbcfg.IsSetUp() {
-		return nil, nil
-	}
-
-	err := migrations.MigrateDB(dbcfg, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	dbconn, err := db.NewPostgresDB(context.Background(), dbcfg)
-	if err != nil {
-		return nil, fmt.Errorf("can't create postgres database connection pool: %w", err)
-	}
-
-	logger.Sugar().Infow("initialized postgres database connection pool",
-		"DSN", dbcfg.DBConnString)
-	return dbconn, nil
 }

@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Masterminds/squirrel"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
 
 type PostgresDBStorage struct {
-	pool    *pgxpool.Pool
+	conn    db.Connection
 	sqrl    squirrel.StatementBuilderType
 	retrier *retrying.Executor
 	logger  *zap.SugaredLogger
@@ -38,7 +38,7 @@ func isPgErrorRetryable(err error) bool {
 	return false
 }
 
-func NewPostgresDBStorage(pool *pgxpool.Pool, logger *zap.Logger, retryPolicy retrying.Policy) *PostgresDBStorage {
+func NewPostgresDBStorage(conn db.Connection, logger *zap.Logger, retryPolicy retrying.Policy) *PostgresDBStorage {
 	pgLogger := logger.Sugar().With(zap.String("component", "postgres-storage"))
 
 	retrier := retrying.NewExecutorBuilder(retryPolicy).
@@ -47,7 +47,7 @@ func NewPostgresDBStorage(pool *pgxpool.Pool, logger *zap.Logger, retryPolicy re
 		Executor()
 
 	return &PostgresDBStorage{
-		pool:    pool,
+		conn:    conn,
 		sqrl:    squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 		retrier: retrier,
 		logger:  pgLogger,
@@ -79,7 +79,7 @@ func (pgs *PostgresDBStorage) SetGauge(ctx context.Context, id string, value flo
 	err = pgs.retrier.Run(func() error {
 		pgs.logger.Debugw("set gauge query", "query", query, "args", args)
 		var err error
-		res, err = pgs.pool.Exec(ctx, query, args...)
+		res, err = pgs.conn.Pool().Exec(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("failed to execute set gauge query: %w", err)
 		}
@@ -120,7 +120,7 @@ func (pgs *PostgresDBStorage) AddCounter(ctx context.Context, id string, delta i
 	err = pgs.retrier.Run(func() error {
 		pgs.logger.Debugw("add counter query", "query", query, "args", args)
 		var err error
-		res, err = pgs.pool.Exec(ctx, query, args...)
+		res, err = pgs.conn.Pool().Exec(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("failed to execute add counter query: %w", err)
 		}
@@ -151,7 +151,7 @@ func (pgs *PostgresDBStorage) GetByID(ctx context.Context, id string) (*model.Me
 
 	err = pgs.retrier.Run(func() error {
 		pgs.logger.Debugw("get metric by ID query", "query", query, "args", args)
-		row := pgs.pool.QueryRow(ctx, query, args...)
+		row := pgs.conn.Pool().QueryRow(ctx, query, args...)
 		if err := row.Scan(&mtype, &delta, &value); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrMetricNotFound
@@ -193,7 +193,7 @@ func (pgs *PostgresDBStorage) GetAllSorted(ctx context.Context) ([]*model.Metric
 
 	err = pgs.retrier.Run(func() error {
 		pgs.logger.Debugw("get all metrics query", "query", query, "args", args)
-		rows, err := pgs.pool.Query(ctx, query, args...)
+		rows, err := pgs.conn.Pool().Query(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("failed to execute get all metrics query: %w", err)
 		}
@@ -229,7 +229,7 @@ func (pgs *PostgresDBStorage) SetAll(ctx context.Context, metrics []*model.Metri
 
 func (pgs *PostgresDBStorage) ResetAll(ctx context.Context) error {
 	return pgs.retrier.Run(func() error {
-		if _, err := pgs.pool.Exec(ctx, "TRUNCATE TABLE metrics"); err != nil {
+		if _, err := pgs.conn.Pool().Exec(ctx, "TRUNCATE TABLE metrics"); err != nil {
 			return fmt.Errorf("failed to truncate all metrics table: %w", err)
 		}
 		return nil
@@ -237,7 +237,7 @@ func (pgs *PostgresDBStorage) ResetAll(ctx context.Context) error {
 }
 
 func (pgs *PostgresDBStorage) Close() error {
-	pgs.pool.Close()
+	pgs.conn.Close()
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (pgs *PostgresDBStorage) batchValidate(ctx context.Context, metrics []*mode
 	}
 
 	pgs.logger.Debugw("batch get metric query", "query", query, "args", args)
-	rows, err := pgs.pool.Query(ctx, query, args...)
+	rows, err := pgs.conn.Pool().Query(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to get metric types: %w", err)
 	}
@@ -278,7 +278,7 @@ func (pgs *PostgresDBStorage) batchValidate(ctx context.Context, metrics []*mode
 }
 
 func (pgs *PostgresDBStorage) batchSet(ctx context.Context, metrics []*model.Metrics) error {
-	tx, err := pgs.pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := pgs.conn.Pool().BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to initialize DB transaction: %w", err)
 	}
@@ -312,4 +312,8 @@ func (pgs *PostgresDBStorage) batchSet(ctx context.Context, metrics []*model.Met
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (pgs *PostgresDBStorage) Ping(ctx context.Context) error {
+	return pgs.conn.Ping(ctx)
 }

@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"github.com/andrewsvn/metrics-overseer/internal/agent/mocks"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"github.com/andrewsvn/metrics-overseer/internal/mocks"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
-	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/mock"
 	"testing"
 
 	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
@@ -47,15 +47,13 @@ func TestAgentPolling(t *testing.T) {
 }
 
 func TestAgentReporting(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	msender := mocks.NewMockMetricSender(ctrl)
 	var mcnt int
 	var cnt1val, cnt2val int64
 	var gauge1val, gauge2val float64
-	msender.EXPECT().SendMetricArray(gomock.Any()).
-		DoAndReturn(func(metrics []*model.Metrics) error {
+
+	msender := new(mocks.MockMetricSender)
+	msender.EXPECT().SendMetricArray(mock.Anything).
+		RunAndReturn(func(metrics []*model.Metrics) error {
 			mcnt = len(metrics)
 			for _, m := range metrics {
 				switch m.ID {
