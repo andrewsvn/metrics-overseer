@@ -13,7 +13,15 @@ const (
 	defaultLogLevel          = "info"
 )
 
+type ReportRetryConfig struct {
+	MaxRetryCount          int `env:"REPORT_RETRY_COUNT" envDefault:"3"`
+	InitialRetryDelaySec   int `env:"REPORT_INITIAL_RETRY_DELAY" envDefault:"1"`
+	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT" envDefault:"2"`
+}
+
 type Config struct {
+	ReportRetryConfig
+
 	ServerAddr        string `env:"ADDRESS"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
@@ -30,6 +38,11 @@ func Read() (*Config, error) {
 
 func Default() *Config {
 	cfg := &Config{
+		ReportRetryConfig: ReportRetryConfig{
+			MaxRetryCount:          3,
+			InitialRetryDelaySec:   1,
+			RetryDelayIncrementSec: 2,
+		},
 		ServerAddr:        defaultServerAddr,
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,

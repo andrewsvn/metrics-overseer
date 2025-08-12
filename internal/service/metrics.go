@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/dump"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"html/template"
@@ -15,7 +15,6 @@ var metricspage string
 
 type MetricsService struct {
 	storage        repository.Storage
-	dumper         *dump.StorageDumper
 	allMetricsTmpl *template.Template
 }
 
@@ -29,50 +28,34 @@ func NewMetricsService(st repository.Storage) *MetricsService {
 	}
 }
 
-func (ms *MetricsService) AttachDumper(dm *dump.StorageDumper) {
-	ms.dumper = dm
-}
-
-func (ms *MetricsService) AccumulateCounter(id string, inc int64) error {
-	err := ms.storage.AddCounter(id, inc)
+func (ms *MetricsService) AccumulateCounter(ctx context.Context, id string, inc int64) error {
+	err := ms.storage.AddCounter(ctx, id, inc)
 	if err != nil {
 		return err
 	}
 
-	if ms.dumper != nil {
-		err := ms.dumper.Store()
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-func (ms *MetricsService) SetGauge(id string, val float64) error {
-	err := ms.storage.SetGauge(id, val)
+func (ms *MetricsService) SetGauge(ctx context.Context, id string, val float64) error {
+	err := ms.storage.SetGauge(ctx, id, val)
 	if err != nil {
 		return err
 	}
 
-	if ms.dumper != nil {
-		err := ms.dumper.Store()
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-func (ms *MetricsService) GetCounter(id string) (*int64, error) {
-	return ms.storage.GetCounter(id)
+func (ms *MetricsService) GetCounter(ctx context.Context, id string) (*int64, error) {
+	return ms.storage.GetCounter(ctx, id)
 }
 
-func (ms *MetricsService) GetGauge(id string) (*float64, error) {
-	return ms.storage.GetGauge(id)
+func (ms *MetricsService) GetGauge(ctx context.Context, id string) (*float64, error) {
+	return ms.storage.GetGauge(ctx, id)
 }
 
-func (ms *MetricsService) GetMetric(id, mtype string) (*model.Metrics, error) {
-	metric, err := ms.storage.GetByID(id)
+func (ms *MetricsService) GetMetric(ctx context.Context, id, mtype string) (*model.Metrics, error) {
+	metric, err := ms.storage.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +65,11 @@ func (ms *MetricsService) GetMetric(id, mtype string) (*model.Metrics, error) {
 	return metric, nil
 }
 
-func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
+func (ms *MetricsService) BatchSetMetrics(ctx context.Context, metrics []*model.Metrics) error {
+	return ms.storage.BatchUpdate(ctx, metrics)
+}
+
+func (ms *MetricsService) GenerateAllMetricsHTML(ctx context.Context, w io.Writer) error {
 	if ms.allMetricsTmpl == nil {
 		tmpl := template.New("metricspage")
 		tmpl, err := tmpl.Parse(metricspage)
@@ -92,7 +79,7 @@ func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 		ms.allMetricsTmpl = tmpl
 	}
 
-	metrics, err := ms.storage.GetAllSorted()
+	metrics, err := ms.storage.GetAllSorted(ctx)
 	if err != nil {
 		return fmt.Errorf("can't get all metrics from storage: %w", err)
 	}
@@ -101,4 +88,8 @@ func (ms *MetricsService) GenerateAllMetricsHTML(w io.Writer) error {
 		Metrics: metrics,
 	}
 	return ms.allMetricsTmpl.Execute(w, page)
+}
+
+func (ms *MetricsService) PingStorage(ctx context.Context) error {
+	return ms.storage.Ping(ctx)
 }

@@ -2,18 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/dump"
+	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
+	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"github.com/andrewsvn/metrics-overseer/internal/server"
+	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"strings"
-	"time"
-
-	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
-	"github.com/andrewsvn/metrics-overseer/internal/handler"
-	"github.com/andrewsvn/metrics-overseer/internal/repository"
-	"github.com/andrewsvn/metrics-overseer/internal/service"
 )
 
 func main() {
@@ -31,45 +28,18 @@ func run() error {
 		return fmt.Errorf("can't initialize logger: %w", err)
 	}
 
-	mstor := repository.NewMemStorage()
-	mdumper := dump.NewStorageDumper(cfg.StorageFilePath, mstor, logger)
-
-	if cfg.RestoreOnStartup {
-		err := mdumper.Load()
-		if err != nil {
-			logger.Error("failed to load metrics on startup", zap.Error(err))
-		}
+	stor, err := server.InitializeStorage(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("can't initialize storage: %w", err)
 	}
-
-	// store on shutdown - not implemented yet
 	defer func() {
-		err := mdumper.Store()
+		err := stor.Close()
 		if err != nil {
-			logger.Error("failed to store metrics on shutdown", zap.Error(err))
+			logger.Error("failed to close storage", zap.Error(err))
 		}
 	}()
 
-	if cfg.StoreIntervalSec > 0 {
-		// subscribing on store timer
-		storeInterval := time.Duration(cfg.StoreIntervalSec) * time.Second
-		storeTicker := time.NewTicker(storeInterval)
-		logger.Info("Scheduling metrics storing to file", zap.Duration("interval", storeInterval))
-		go func() {
-			for {
-				<-storeTicker.C
-				err := mdumper.Store()
-				if err != nil {
-					logger.Error("failed to store metrics", zap.Error(err))
-				}
-			}
-		}()
-	}
-
-	msrv := service.NewMetricsService(mstor)
-	if cfg.StoreIntervalSec == 0 {
-		msrv.AttachDumper(mdumper)
-	}
-
+	msrv := service.NewMetricsService(stor)
 	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 	r := mhandlers.GetRouter()
 

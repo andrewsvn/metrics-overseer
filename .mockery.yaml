@@ -1,0 +1,14 @@
+with-expecter: true
+packages:
+  github.com/andrewsvn/metrics-overseer/internal/agent/sender:
+    interfaces:
+      MetricSender:
+        config:
+          dir: ./internal/mocks
+          outpkg: mocks
+  github.com/andrewsvn/metrics-overseer/internal/db:
+    interfaces:
+      Connection:
+        config:
+          dir: ./internal/mocks
+          outpkg: mocks

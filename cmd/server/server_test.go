@@ -2,7 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"github.com/andrewsvn/metrics-overseer/internal/mocks"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -97,7 +104,7 @@ func TestUpdateByPathHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -179,7 +186,7 @@ func TestUpdateValueByJSONHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -280,7 +287,7 @@ func TestGetPlainValueHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -395,7 +402,7 @@ func TestGetJSONValueHandler(t *testing.T) {
 		},
 	}
 
-	srv := setupServer()
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	for _, test := range tests {
@@ -426,7 +433,7 @@ func getJSONValueHandlerSingleTest(t *testing.T, test testCase, srv *httptest.Se
 }
 
 func TestGetAllMetricsPage(t *testing.T) {
-	srv := setupServer()
+	srv := setupServerWithMemStorage()
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
@@ -449,13 +456,53 @@ func TestGetAllMetricsPage(t *testing.T) {
 		string(resBody))
 }
 
-func setupServer() *httptest.Server {
+func TestDBConnectionPing(t *testing.T) {
+	mconn := new(mocks.MockConnection)
+	mconn.EXPECT().Pool().Return(&pgxpool.Pool{})
+
+	srv := setupServerWithDummyDBStorage(mconn)
+	defer srv.Close()
+
+	mconn.EXPECT().Ping(mock.Anything).Return(nil).Once()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/ping", nil)
+	require.NoError(t, err)
+
+	res, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	mconn.EXPECT().Ping(mock.Anything).Return(fmt.Errorf("no connection")).Once()
+
+	res2, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer func() {
+		_ = res2.Body.Close()
+	}()
+	assert.Equal(t, http.StatusInternalServerError, res2.StatusCode)
+}
+
+func setupServerWithMemStorage() *httptest.Server {
+	ctx := context.Background()
 	logger, _ := logging.NewZapLogger("info")
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
-	_ = msrv.AccumulateCounter("cnt1", 10)
-	_ = msrv.SetGauge("gauge1", 3.14)
+	_ = msrv.AccumulateCounter(ctx, "cnt1", 10)
+	_ = msrv.SetGauge(ctx, "gauge1", 3.14)
+	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+
+	return httptest.NewServer(mhandlers.GetRouter())
+}
+
+func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
+	logger, _ := logging.NewZapLogger("info")
+
+	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
+	msrv := service.NewMetricsService(mstor)
 	mhandlers := handler.NewMetricsHandlers(msrv, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
