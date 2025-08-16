@@ -40,7 +40,7 @@ func run() error {
 	}()
 
 	msrv := service.NewMetricsService(stor)
-	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
 	r := mhandlers.GetRouter()
 
 	addr := strings.Trim(cfg.Addr, "\"")

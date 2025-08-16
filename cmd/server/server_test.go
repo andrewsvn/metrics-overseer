@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/mocks"
@@ -493,7 +494,8 @@ func setupServerWithMemStorage() *httptest.Server {
 	msrv := service.NewMetricsService(mstor)
 	_ = msrv.AccumulateCounter(ctx, "cnt1", 10)
 	_ = msrv.SetGauge(ctx, "gauge1", 3.14)
-	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+
+	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }
@@ -503,7 +505,7 @@ func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
 
 	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
 	msrv := service.NewMetricsService(mstor)
-	mhandlers := handler.NewMetricsHandlers(msrv, logger)
+	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }
