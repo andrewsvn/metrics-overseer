@@ -25,6 +25,7 @@ type Config struct {
 	ServerAddr        string `env:"ADDRESS"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
+	SecretKey         string `env:"KEY"`
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
@@ -58,4 +59,6 @@ func (cfg *Config) bindFlags() {
 		fmt.Sprintf("metrics polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVar(&cfg.ReportIntervalSec, "r", defaultReportIntervalSec,
 		fmt.Sprintf("metrics reporting interval, seconds (default: %d)", defaultReportIntervalSec))
+	flag.StringVar(&cfg.SecretKey, "k", "",
+		"secret key for request signing")
 }

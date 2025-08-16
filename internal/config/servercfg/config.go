@@ -36,10 +36,15 @@ type PostgresRetryConfig struct {
 	RetryDelayIncrementSec int `env:"PG_RETRY_DELAY_INCREMENT" envDefault:"2"`
 }
 
+type SecurityConfig struct {
+	SecretKey string `env:"KEY"`
+}
+
 type Config struct {
 	FileStorageConfig
 	DatabaseConfig
 	PostgresRetryConfig
+	SecurityConfig
 
 	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
 	Addr     string `env:"ADDRESS"`
@@ -66,4 +71,7 @@ func (cfg *Config) bindFlags() {
 
 	flag.StringVar(&cfg.DBConnString, "d", "",
 		"postgres database connection string (should be specified to enable postgres storage)")
+
+	flag.StringVar(&cfg.SecretKey, "k", "",
+		"secret key for verifying requests and signing responses")
 }

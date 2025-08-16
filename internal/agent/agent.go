@@ -38,7 +38,7 @@ func NewAgent(cfg *agentcfg.Config, logger *zap.Logger) (*Agent, error) {
 	)
 
 	serverAddr := strings.Trim(cfg.ServerAddr, "\"")
-	sndr, err := sender.NewRestSender(serverAddr, logger, reportRetryPolicy)
+	sndr, err := sender.NewRestSender(serverAddr, logger, reportRetryPolicy, cfg.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("can't construct agent from config: %w", err)
 	}
