@@ -18,18 +18,18 @@ func TestAgentAccumulators(t *testing.T) {
 	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
-	assert.Empty(t, a.accums)
+	assert.Equal(t, 0, a.accums.Length())
 
 	a.storeCounterMetric("cnt1", 1)
 	a.storeCounterMetric("cnt2", 0)
 	a.storeGaugeMetric("gauge1", 1.25)
 	a.storeGaugeMetric("gauge2", -3.14)
 
-	assert.Equal(t, 4, len(a.accums))
-	assert.NotNil(t, a.accums["cnt1"])
-	assert.NotNil(t, a.accums["cnt2"])
-	assert.NotNil(t, a.accums["gauge1"])
-	assert.NotNil(t, a.accums["gauge2"])
+	assert.Equal(t, 4, a.accums.Length())
+	assert.NotNil(t, a.accums.Get("cnt1"))
+	assert.NotNil(t, a.accums.Get("cnt2"))
+	assert.NotNil(t, a.accums.Get("gauge1"))
+	assert.NotNil(t, a.accums.Get("gauge2"))
 }
 
 func TestAgentPolling(t *testing.T) {
@@ -39,11 +39,9 @@ func TestAgentPolling(t *testing.T) {
 	require.NoError(t, err)
 
 	a.execPoll()
-	assert.Greater(t, len(a.accums), 2)
-	_, exists := a.accums["RandomValue"]
-	assert.True(t, exists)
-	_, exists = a.accums["PollCount"]
-	assert.True(t, exists)
+	assert.Greater(t, a.accums.Length(), 2)
+	assert.NotNil(t, a.accums.Get("RandomValue"))
+	assert.NotNil(t, a.accums.Get("PollCount"))
 }
 
 func TestAgentReporting(t *testing.T) {
@@ -75,7 +73,7 @@ func TestAgentReporting(t *testing.T) {
 	require.NoError(t, err)
 	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
-	a.sndr = msender
+	a.mSender = msender
 
 	a.storeCounterMetric("cnt1", 1)
 	a.storeCounterMetric("cnt2", 0)

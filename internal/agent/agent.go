@@ -22,8 +22,8 @@ type Agent struct {
 	pollInterval   time.Duration
 	reportInterval time.Duration
 
-	accums map[string]*metrics.MetricAccumulator
-	sndr   sender.MetricSender
+	accums  *metrics.AccumulatorStorage
+	mSender sender.MetricSender
 
 	logger *zap.SugaredLogger
 }
@@ -51,8 +51,8 @@ func NewAgent(cfg *agentcfg.Config, logger *zap.Logger) (*Agent, error) {
 		pollInterval:   time.Duration(cfg.PollIntervalSec) * time.Second,
 		reportInterval: time.Duration(cfg.ReportIntervalSec) * time.Second,
 
-		accums: make(map[string]*metrics.MetricAccumulator),
-		sndr:   sndr,
+		accums:  metrics.NewAccumulatorStorage(),
+		mSender: sndr,
 
 		logger: agentLogger,
 	}
@@ -129,8 +129,8 @@ func (a *Agent) report(tc <-chan time.Time) {
 
 func (a *Agent) execReport() {
 	a.logger.Info("reporting metrics to server")
-	marray := make([]*model.Metrics, 0, len(a.accums))
-	for _, ma := range a.accums {
+	marray := make([]*model.Metrics, 0)
+	for ma := range a.accums.GetAll() {
 		metric, err := ma.StageChanges()
 		if err != nil {
 			a.logger.Errorw("unable to stage metric for sending",
@@ -148,7 +148,7 @@ func (a *Agent) execReport() {
 		}
 	}
 
-	err := a.sndr.SendMetricArray(marray)
+	err := a.mSender.SendMetricArray(marray)
 	if err != nil {
 		a.logger.Errorw("unable to send metrics to server",
 			"error", err,
@@ -157,7 +157,7 @@ func (a *Agent) execReport() {
 	}
 
 	for _, m := range marray {
-		err := a.accums[m.ID].CommitStaged()
+		err := a.accums.GetOrNew(m.ID).CommitStaged()
 		if err != nil {
 			a.logger.Errorw("unable to commit staged metric",
 				"metric", m.ID,
@@ -167,11 +167,7 @@ func (a *Agent) execReport() {
 }
 
 func (a *Agent) storeCounterMetric(id string, delta int64) {
-	ma, exist := a.accums[id]
-	if !exist {
-		ma = metrics.NewMetricAccumulator(id, model.Counter)
-		a.accums[id] = ma
-	}
+	ma := a.accums.GetOrNew(id)
 	err := ma.AccumulateCounter(delta)
 	if err != nil {
 		a.logger.Errorw("failed to store counter metric",
@@ -182,11 +178,7 @@ func (a *Agent) storeCounterMetric(id string, delta int64) {
 }
 
 func (a *Agent) storeGaugeMetric(id string, value float64) {
-	ma, exist := a.accums[id]
-	if !exist {
-		ma = metrics.NewMetricAccumulator(id, model.Gauge)
-		a.accums[id] = ma
-	}
+	ma := a.accums.GetOrNew(id)
 	err := ma.AccumulateGauge(value)
 	if err != nil {
 		a.logger.Errorw("failed to store gauge metric",

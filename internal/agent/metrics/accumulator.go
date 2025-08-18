@@ -36,14 +36,17 @@ var (
 	ErrWrongStagingState = errors.New("incorrect operation for current staging state")
 )
 
-func NewMetricAccumulator(id string, mtype string) *MetricAccumulator {
+func NewMetricAccumulator(id string) *MetricAccumulator {
 	return &MetricAccumulator{
-		ID:    id,
-		MType: mtype,
+		ID: id,
 	}
 }
 
 func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
+	if len(ma.MType) == 0 {
+		ma.MType = model.Counter
+	}
+
 	if ma.MType != model.Counter {
 		return fmt.Errorf("%w: expected counter, got %v", model.ErrIncorrectAccess, ma.MType)
 	}
@@ -60,6 +63,10 @@ func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 }
 
 func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
+	if len(ma.MType) == 0 {
+		ma.MType = model.Gauge
+	}
+
 	if ma.MType != model.Gauge {
 		return fmt.Errorf("%w: expected gauge, got %v", model.ErrIncorrectAccess, ma.MType)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestCounterAccumulator(t *testing.T) {
-	cntAcc := NewMetricAccumulator("cnt", model.Counter)
+	cntAcc := NewMetricAccumulator("cnt")
 	assert.Nil(t, cntAcc.Delta)
 	assert.Empty(t, cntAcc.Values)
 
@@ -51,15 +51,15 @@ func TestCounterAccumulator(t *testing.T) {
 }
 
 func TestGaugeAccumulator(t *testing.T) {
-	gaAcc := NewMetricAccumulator("mem", model.Gauge)
+	gaAcc := NewMetricAccumulator("mem")
 	assert.Nil(t, gaAcc.Delta)
 	assert.Empty(t, gaAcc.Values)
 
-	err := gaAcc.AccumulateCounter(1)
-	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
-
-	err = gaAcc.AccumulateGauge(1.5)
+	err := gaAcc.AccumulateGauge(1.5)
 	require.NoError(t, err)
+
+	err = gaAcc.AccumulateCounter(1)
+	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
 
 	_ = gaAcc.AccumulateGauge(3.0)
 	_ = gaAcc.AccumulateGauge(4.5)

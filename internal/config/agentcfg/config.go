@@ -19,6 +19,11 @@ type ReportRetryConfig struct {
 	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT" envDefault:"2"`
 }
 
+type ReportingConfig struct {
+	MaxNumberOfRequests int `env:"RATE_LIMIT" envDefault:"0"`
+	MaxBatchSize        int `env:"REPORT_BATCH_SIZE" envDefault:"0"`
+}
+
 type Config struct {
 	ReportRetryConfig
 
