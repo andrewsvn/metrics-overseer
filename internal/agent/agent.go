@@ -1,15 +1,19 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"github.com/andrewsvn/metrics-overseer/internal/agent/reporting"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"go.uber.org/zap"
 	"math/rand"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent/metrics"
@@ -21,9 +25,12 @@ import (
 type Agent struct {
 	pollInterval   time.Duration
 	reportInterval time.Duration
+	gracePeriod    time.Duration
 
-	accums  *metrics.AccumulatorStorage
-	mSender sender.MetricSender
+	accums      *metrics.AccumulatorStorage
+	mSender     sender.MetricSender
+	reporter    reporting.Reporter
+	reportMutex sync.Mutex
 
 	logger *zap.SugaredLogger
 }
@@ -43,47 +50,77 @@ func NewAgent(cfg *agentcfg.Config, logger *zap.Logger) (*Agent, error) {
 		return nil, fmt.Errorf("can't construct agent from config: %w", err)
 	}
 
+	reporter := newReporter(cfg, logger)
+
 	agentLogger.Infow("initializing metrics-overseer agent",
-		"poll interval (sec)", cfg.PollIntervalSec,
-		"report interval (sec)", cfg.ReportIntervalSec)
+		"memPoll interval (sec)", cfg.PollIntervalSec,
+		"report interval (sec)", cfg.ReportIntervalSec,
+		"parallel report requests", cfg.MaxNumberOfRequests)
 
 	a := &Agent{
 		pollInterval:   time.Duration(cfg.PollIntervalSec) * time.Second,
 		reportInterval: time.Duration(cfg.ReportIntervalSec) * time.Second,
+		gracePeriod:    time.Duration(cfg.GracePeriodSec) * time.Second,
 
-		accums:  metrics.NewAccumulatorStorage(),
-		mSender: sndr,
+		accums:   metrics.NewAccumulatorStorage(),
+		mSender:  sndr,
+		reporter: reporter,
 
 		logger: agentLogger,
 	}
 	return a, nil
 }
 
+func newReporter(cfg *agentcfg.Config, l *zap.Logger) reporting.Reporter {
+	if cfg.MaxNumberOfRequests > 0 {
+		return reporting.NewPoolReporter(cfg.MaxNumberOfRequests, l)
+	}
+	return reporting.NewBatchReporter(l)
+}
+
 func (a *Agent) Run() {
 	a.logger.Info("starting metrics-overseer agent")
 
-	pollTicker := time.NewTicker(a.pollInterval)
+	ctx, done := context.WithCancel(context.Background())
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
+	memPollTicker := time.NewTicker(a.pollInterval)
+	gopsPollTicker := time.NewTicker(a.pollInterval)
 	reportTicker := time.NewTicker(a.reportInterval)
 
-	go a.poll(pollTicker.C)
-	go a.report(reportTicker.C)
+	wg := &sync.WaitGroup{}
+	go a.memPoll(ctx, wg, memPollTicker.C)
+	go a.gopsPoll(ctx, wg, gopsPollTicker.C)
+	go a.report(ctx, wg, reportTicker.C)
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
+	<-stop
+	done()
 
-	a.logger.Info("shutting down metrics-overseer agent")
+	a.logger.Info("shutting down metrics-overseer agent...")
+	_, shutdownCancel := context.WithTimeout(context.Background(), a.gracePeriod)
+	defer shutdownCancel()
+
+	wg.Wait()
+	a.logger.Info("metrics-overseer agent successfully stopped")
 }
 
-func (a *Agent) poll(tc <-chan time.Time) {
+func (a *Agent) memPoll(ctx context.Context, wg *sync.WaitGroup, tc <-chan time.Time) {
+	wg.Add(1)
+	defer wg.Done()
+
 	for {
-		<-tc
-		a.execPoll()
+		select {
+		case <-ctx.Done():
+			return
+		case <-tc:
+			a.execMemstatsPoll()
+		}
 	}
 }
 
-func (a *Agent) execPoll() {
-	a.logger.Info("polling metrics")
+func (a *Agent) execMemstatsPoll() {
+	a.logger.Info("polling memstats metrics")
 
 	ms := runtime.MemStats{}
 	runtime.ReadMemStats(&ms)
@@ -120,14 +157,62 @@ func (a *Agent) execPoll() {
 	a.storeCounterMetric("PollCount", 1)
 }
 
-func (a *Agent) report(tc <-chan time.Time) {
+func (a *Agent) gopsPoll(ctx context.Context, wg *sync.WaitGroup, tc <-chan time.Time) {
+	wg.Add(1)
+	defer wg.Done()
+
 	for {
-		<-tc
-		a.execReport()
+		select {
+		case <-ctx.Done():
+			return
+		case <-tc:
+			a.execGopsPoll()
+		}
+	}
+}
+
+func (a *Agent) execGopsPoll() {
+	a.logger.Info("polling gops metrics")
+
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		a.logger.Errorw("failed to get gops memory metrics", "error", err)
+		return
+	}
+
+	a.storeGaugeMetric("TotalMemory", float64(vmStat.Total))
+	a.storeGaugeMetric("FreeMemory", float64(vmStat.Free))
+
+	cpuUtils, err := cpu.Percent(0, true)
+	if err != nil {
+		a.logger.Errorw("failed to get gops cpu metrics", "error", err)
+		return
+	}
+
+	for id, cpuUtil := range cpuUtils {
+		a.storeGaugeMetric(fmt.Sprintf("CPUutilization%d", id+1), cpuUtil)
+	}
+}
+
+func (a *Agent) report(ctx context.Context, wg *sync.WaitGroup, tc <-chan time.Time) {
+	wg.Add(1)
+	defer wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			a.execReport()
+			return
+		case <-tc:
+			a.execReport()
+		}
 	}
 }
 
 func (a *Agent) execReport() {
+	a.reportMutex.Lock()
+	defer a.reportMutex.Unlock()
+
 	a.logger.Info("reporting metrics to server")
 	marray := make([]*model.Metrics, 0)
 	for ma := range a.accums.GetAll() {
@@ -139,28 +224,27 @@ func (a *Agent) execReport() {
 			)
 			continue
 		}
-		defer func(ma *metrics.MetricAccumulator) {
-			_ = ma.RollbackStaged()
-		}(ma)
 
 		if metric != nil {
 			marray = append(marray, metric)
 		}
 	}
 
-	err := a.mSender.SendMetricArray(marray)
-	if err != nil {
-		a.logger.Errorw("unable to send metrics to server",
-			"error", err,
-		)
-		return
-	}
+	result := a.reporter.Execute(context.Background(), a.mSender, marray)
 
-	for _, m := range marray {
-		err := a.accums.GetOrNew(m.ID).CommitStaged()
+	for _, id := range result.SuccessIDs {
+		err := a.accums.Get(id).CommitStaged()
 		if err != nil {
 			a.logger.Errorw("unable to commit staged metric",
-				"metric", m.ID,
+				"metric", id,
+				"error", err)
+		}
+	}
+	for _, id := range result.FailureIDs {
+		err := a.accums.Get(id).RollbackStaged()
+		if err != nil {
+			a.logger.Errorw("unable to rollback staged metric",
+				"metric", id,
 				"error", err)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 
 const (
 	defaultAddr             = ":8080"
+	defaultGracePeriodSec   = 30
 	defaultStoreIntervalSec = 300
 	defaultRestoreOnStartup = false
 )
@@ -46,8 +47,9 @@ type Config struct {
 	PostgresRetryConfig
 	SecurityConfig
 
-	LogLevel string `env:"SERVER_LOG_LEVEL" default:"info"`
-	Addr     string `env:"ADDRESS"`
+	LogLevel       string `env:"SERVER_LOG_LEVEL" default:"info"`
+	Addr           string `env:"ADDRESS"`
+	GracePeriodSec int    `env:"SERVER_GRACE_PERIOD"`
 }
 
 func Read() (*Config, error) {
@@ -61,6 +63,8 @@ func Read() (*Config, error) {
 func (cfg *Config) bindFlags() {
 	flag.StringVar(&cfg.Addr, "a", defaultAddr,
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
+	flag.IntVar(&cfg.GracePeriodSec, "gs", defaultGracePeriodSec,
+		fmt.Sprintf("server grace period in seconds (default: %d)", defaultGracePeriodSec))
 
 	flag.StringVar(&cfg.StorageFilePath, "f", "",
 		"metrics storage file path (should be specified to enable file storage)")

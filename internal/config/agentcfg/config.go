@@ -10,6 +10,7 @@ const (
 	defaultServerAddr        = "http://localhost:8080"
 	defaultPollIntervalSec   = 2
 	defaultReportIntervalSec = 10
+	defaultGracePeriodSec    = 30
 	defaultLogLevel          = "info"
 )
 
@@ -20,16 +21,17 @@ type ReportRetryConfig struct {
 }
 
 type ReportingConfig struct {
-	MaxNumberOfRequests int `env:"RATE_LIMIT" envDefault:"0"`
-	MaxBatchSize        int `env:"REPORT_BATCH_SIZE" envDefault:"0"`
+	MaxNumberOfRequests int `env:"RATE_LIMIT"`
 }
 
 type Config struct {
+	ReportingConfig
 	ReportRetryConfig
 
 	ServerAddr        string `env:"ADDRESS"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
+	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD"`
 	SecretKey         string `env:"KEY"`
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
@@ -52,6 +54,7 @@ func Default() *Config {
 		ServerAddr:        defaultServerAddr,
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,
+		GracePeriodSec:    defaultGracePeriodSec,
 		LogLevel:          defaultLogLevel,
 	}
 	return cfg
@@ -64,6 +67,13 @@ func (cfg *Config) bindFlags() {
 		fmt.Sprintf("metrics polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVar(&cfg.ReportIntervalSec, "r", defaultReportIntervalSec,
 		fmt.Sprintf("metrics reporting interval, seconds (default: %d)", defaultReportIntervalSec))
+	flag.IntVar(&cfg.GracePeriodSec, "gs", defaultGracePeriodSec,
+		fmt.Sprintf("metrics agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
+
+	flag.IntVar(&cfg.MaxNumberOfRequests, "l", 0,
+		fmt.Sprintf("maximum number of simultaneous reporting requests (default: 0). "+
+			"If 0, single-thread batching is used"))
+
 	flag.StringVar(&cfg.SecretKey, "k", "",
 		"secret key for request signing")
 }

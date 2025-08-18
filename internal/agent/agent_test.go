@@ -38,7 +38,7 @@ func TestAgentPolling(t *testing.T) {
 	a, err := NewAgent(agentcfg.Default(), l)
 	require.NoError(t, err)
 
-	a.execPoll()
+	a.execMemstatsPoll()
 	assert.Greater(t, a.accums.Length(), 2)
 	assert.NotNil(t, a.accums.Get("RandomValue"))
 	assert.NotNil(t, a.accums.Get("PollCount"))
