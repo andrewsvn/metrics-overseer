@@ -1,4 +1,4 @@
-package sender
+package sending
 
 import (
 	"bytes"
@@ -28,9 +28,9 @@ type RestSender struct {
 
 func NewRestSender(
 	addr string,
-	logger *zap.Logger,
 	retryPolicy retrying.Policy,
 	secretKey string,
+	logger *zap.Logger,
 ) (*RestSender, error) {
 	restLogger := logger.Sugar().With(zap.String("component", "rest-sender"))
 

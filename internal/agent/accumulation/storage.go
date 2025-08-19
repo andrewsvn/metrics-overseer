@@ -1,4 +1,4 @@
-package metrics
+package accumulation
 
 import (
 	"iter"
@@ -6,18 +6,18 @@ import (
 	"sync"
 )
 
-type AccumulatorStorage struct {
+type Storage struct {
 	accums map[string]*MetricAccumulator
 	mutex  sync.Mutex
 }
 
-func NewAccumulatorStorage() *AccumulatorStorage {
-	return &AccumulatorStorage{
+func NewAccumulatorStorage() *Storage {
+	return &Storage{
 		accums: make(map[string]*MetricAccumulator),
 	}
 }
 
-func (storage *AccumulatorStorage) GetOrNew(id string) *MetricAccumulator {
+func (storage *Storage) GetOrNew(id string) *MetricAccumulator {
 	if storage.accums[id] == nil {
 		storage.mutex.Lock()
 		if storage.accums[id] == nil {
@@ -28,14 +28,14 @@ func (storage *AccumulatorStorage) GetOrNew(id string) *MetricAccumulator {
 	return storage.accums[id]
 }
 
-func (storage *AccumulatorStorage) Get(id string) *MetricAccumulator {
+func (storage *Storage) Get(id string) *MetricAccumulator {
 	return storage.accums[id]
 }
 
-func (storage *AccumulatorStorage) GetAll() iter.Seq[*MetricAccumulator] {
+func (storage *Storage) GetAll() iter.Seq[*MetricAccumulator] {
 	return maps.Values(storage.accums)
 }
 
-func (storage *AccumulatorStorage) Length() int {
+func (storage *Storage) Length() int {
 	return len(storage.accums)
 }

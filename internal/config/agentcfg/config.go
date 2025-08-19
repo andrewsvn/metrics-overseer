@@ -64,11 +64,11 @@ func (cfg *Config) bindFlags() {
 	flag.StringVar(&cfg.ServerAddr, "a", defaultServerAddr,
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
 	flag.IntVar(&cfg.PollIntervalSec, "p", defaultPollIntervalSec,
-		fmt.Sprintf("metrics polling interval, seconds (default: %d)", defaultPollIntervalSec))
+		fmt.Sprintf("accumulation polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVar(&cfg.ReportIntervalSec, "r", defaultReportIntervalSec,
-		fmt.Sprintf("metrics reporting interval, seconds (default: %d)", defaultReportIntervalSec))
+		fmt.Sprintf("accumulation reporting interval, seconds (default: %d)", defaultReportIntervalSec))
 	flag.IntVar(&cfg.GracePeriodSec, "gs", defaultGracePeriodSec,
-		fmt.Sprintf("metrics agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
+		fmt.Sprintf("accumulation agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
 
 	flag.IntVar(&cfg.MaxNumberOfRequests, "l", 0,
 		fmt.Sprintf("maximum number of simultaneous reporting requests (default: 0). "+
