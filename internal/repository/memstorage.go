@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 )
 
 type MemStorage struct {
-	data map[string]*model.Metrics
+	data  map[string]*model.Metrics
+	mutex sync.Mutex
 }
 
 func NewMemStorage() *MemStorage {
@@ -20,37 +22,39 @@ func NewMemStorage() *MemStorage {
 }
 
 func (ms *MemStorage) GetGauge(_ context.Context, id string) (*float64, error) {
-	m, exists := ms.data[id]
-	if !exists {
+	if ms.data[id] == nil {
 		return nil, ErrMetricNotFound
 	}
-	return m.GetGauge()
+	return ms.data[id].GetGauge()
 }
 
 func (ms *MemStorage) SetGauge(_ context.Context, id string, value float64) error {
-	m, exists := ms.data[id]
-	if !exists {
-		m = model.NewGaugeMetrics(id)
-		ms.data[id] = m
+	if ms.data[id] == nil {
+		ms.mutex.Lock()
+		if ms.data[id] == nil {
+			ms.data[id] = model.NewGaugeMetrics(id)
+		}
+		ms.mutex.Unlock()
 	}
-	return m.SetGauge(value)
+	return ms.data[id].SetGauge(value)
 }
 
 func (ms *MemStorage) GetCounter(_ context.Context, id string) (*int64, error) {
-	m, exists := ms.data[id]
-	if !exists {
+	if ms.data[id] == nil {
 		return nil, ErrMetricNotFound
 	}
-	return m.GetCounter()
+	return ms.data[id].GetCounter()
 }
 
 func (ms *MemStorage) AddCounter(_ context.Context, id string, delta int64) error {
-	m, exists := ms.data[id]
-	if !exists {
-		m = model.NewCounterMetrics(id)
-		ms.data[id] = m
+	if ms.data[id] == nil {
+		ms.mutex.Lock()
+		if ms.data[id] == nil {
+			ms.data[id] = model.NewCounterMetrics(id)
+		}
+		ms.mutex.Unlock()
 	}
-	return m.AddCounter(delta)
+	return ms.data[id].AddCounter(delta)
 }
 
 func (ms *MemStorage) GetByID(_ context.Context, id string) (*model.Metrics, error) {
@@ -92,16 +96,20 @@ func (ms *MemStorage) GetAllSorted(_ context.Context) ([]*model.Metrics, error) 
 }
 
 func (ms *MemStorage) SetAll(_ context.Context, metrics []*model.Metrics) error {
+	ms.mutex.Lock()
 	for _, m := range metrics {
 		ms.data[m.ID] = model.NewMetrics(m.ID, m.MType, m.Delta, m.Value)
 	}
+	ms.mutex.Unlock()
 	return nil
 }
 
 func (ms *MemStorage) ResetAll(_ context.Context) error {
+	ms.mutex.Lock()
 	for _, m := range ms.data {
 		m.Reset()
 	}
+	ms.mutex.Unlock()
 	return nil
 }
 
