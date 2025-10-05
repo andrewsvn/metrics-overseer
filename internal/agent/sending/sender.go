@@ -1,4 +1,4 @@
-package sender
+package sending
 
 import (
 	"github.com/andrewsvn/metrics-overseer/internal/model"

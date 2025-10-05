@@ -10,6 +10,7 @@ const (
 	defaultServerAddr        = "http://localhost:8080"
 	defaultPollIntervalSec   = 2
 	defaultReportIntervalSec = 10
+	defaultGracePeriodSec    = 30
 	defaultLogLevel          = "info"
 )
 
@@ -19,12 +20,19 @@ type ReportRetryConfig struct {
 	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT" envDefault:"2"`
 }
 
+type ReportingConfig struct {
+	MaxNumberOfRequests int `env:"RATE_LIMIT"`
+}
+
 type Config struct {
+	ReportingConfig
 	ReportRetryConfig
 
 	ServerAddr        string `env:"ADDRESS"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
+	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD"`
+	SecretKey         string `env:"KEY"`
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
@@ -46,6 +54,7 @@ func Default() *Config {
 		ServerAddr:        defaultServerAddr,
 		PollIntervalSec:   defaultPollIntervalSec,
 		ReportIntervalSec: defaultReportIntervalSec,
+		GracePeriodSec:    defaultGracePeriodSec,
 		LogLevel:          defaultLogLevel,
 	}
 	return cfg
@@ -55,7 +64,16 @@ func (cfg *Config) bindFlags() {
 	flag.StringVar(&cfg.ServerAddr, "a", defaultServerAddr,
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
 	flag.IntVar(&cfg.PollIntervalSec, "p", defaultPollIntervalSec,
-		fmt.Sprintf("metrics polling interval, seconds (default: %d)", defaultPollIntervalSec))
+		fmt.Sprintf("accumulation polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVar(&cfg.ReportIntervalSec, "r", defaultReportIntervalSec,
-		fmt.Sprintf("metrics reporting interval, seconds (default: %d)", defaultReportIntervalSec))
+		fmt.Sprintf("accumulation reporting interval, seconds (default: %d)", defaultReportIntervalSec))
+	flag.IntVar(&cfg.GracePeriodSec, "gs", defaultGracePeriodSec,
+		fmt.Sprintf("accumulation agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
+
+	flag.IntVar(&cfg.MaxNumberOfRequests, "l", 0,
+		fmt.Sprintf("maximum number of simultaneous reporting requests (default: 0). "+
+			"If 0, single-thread batching is used"))
+
+	flag.StringVar(&cfg.SecretKey, "k", "",
+		"secret key for request signing")
 }
