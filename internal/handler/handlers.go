@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/encrypt"
@@ -16,9 +20,6 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
 type MetricsHandlers struct {
@@ -187,9 +188,9 @@ func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 		mh.logger.Debugw("Trying to update metrics",
 			"count", len(metrics),
 		)
-		err = mh.msrv.BatchSetMetrics(r.Context(), metrics)
+		err = mh.msrv.BatchAccumulateMetrics(r.Context(), metrics)
 		if err != nil {
-			if errors.Is(err, model.ErrIncorrectAccess) {
+			if errors.Is(err, repository.ErrIncorrectAccess) {
 				errorhandling.NewValidationHandlerError(err.Error()).Render(rw)
 				return
 			}
@@ -262,23 +263,16 @@ func (mh *MetricsHandlers) pingStorageHandler() http.HandlerFunc {
 }
 
 func (mh *MetricsHandlers) processUpdateMetric(ctx context.Context, metric *model.Metrics) *errorhandling.Error {
-	var err error
-
-	switch metric.MType {
-	case model.Counter:
-		err = mh.msrv.AccumulateCounter(ctx, metric.ID, *metric.Delta)
-	case model.Gauge:
-		err = mh.msrv.SetGauge(ctx, metric.ID, *metric.Value)
-	default:
-		return errorhandling.NewValidationHandlerError("unsupported metric type: " + metric.MType)
-	}
-
+	err := mh.msrv.AccumulateMetric(ctx, metric)
 	if err != nil {
+		if errors.Is(err, service.ErrUnsupportedMetricType) {
+			return errorhandling.NewValidationHandlerError(err.Error())
+		}
 		if errors.Is(err, repository.ErrStore) {
 			// no impact on main flow, only log this
 			mh.logger.Error("metrics store error", zap.Error(err))
 		}
-		if errors.Is(err, model.ErrIncorrectAccess) {
+		if errors.Is(err, repository.ErrIncorrectAccess) {
 			return errorhandling.NewValidationHandlerError("wrong metric type")
 		}
 		return errorhandling.NewInternalServerError(fmt.Errorf("error updating metric: %w", err))
@@ -340,7 +334,7 @@ func (mh *MetricsHandlers) getMetric(
 
 	metric, err := mh.msrv.GetMetric(ctx, id, mtype)
 	if err != nil {
-		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, model.ErrIncorrectAccess) {
+		if errors.Is(err, repository.ErrMetricNotFound) || errors.Is(err, repository.ErrIncorrectAccess) {
 			return nil, errorhandling.NewNotFoundHandlerError("metric not found")
 		}
 		return nil, errorhandling.NewInternalServerError(fmt.Errorf("error getting metric: %w", err))

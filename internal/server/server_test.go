@@ -4,13 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
-	"github.com/andrewsvn/metrics-overseer/internal/db"
-	"github.com/andrewsvn/metrics-overseer/internal/logging"
-	"github.com/andrewsvn/metrics-overseer/internal/mocks"
-	"github.com/andrewsvn/metrics-overseer/internal/retrying"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +11,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
+	"github.com/andrewsvn/metrics-overseer/internal/db"
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
+	"github.com/andrewsvn/metrics-overseer/internal/mocks"
+	"github.com/andrewsvn/metrics-overseer/internal/retrying"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
@@ -492,8 +493,14 @@ func setupServerWithMemStorage() *httptest.Server {
 
 	mstor := repository.NewMemStorage()
 	msrv := service.NewMetricsService(mstor)
-	_ = msrv.AccumulateCounter(ctx, "cnt1", 10)
-	_ = msrv.SetGauge(ctx, "gauge1", 3.14)
+
+	cm := model.NewCounterMetrics("cnt1")
+	cm.AddCounter(10)
+	_ = msrv.AccumulateMetric(ctx, cm)
+
+	gm := model.NewGaugeMetrics("gauge1")
+	gm.SetGauge(3.14)
+	_ = msrv.AccumulateMetric(ctx, gm)
 
 	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 

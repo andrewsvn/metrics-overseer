@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/model"
-	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"html/template"
 	"io"
+
+	"github.com/andrewsvn/metrics-overseer/internal/model"
+	"github.com/andrewsvn/metrics-overseer/internal/repository"
 )
 
 //go:embed resources/metricspage.html
@@ -17,6 +19,11 @@ type MetricsService struct {
 	storage        repository.Storage
 	allMetricsTmpl *template.Template
 }
+
+var (
+	ErrUnsupportedMetricType  = errors.New("unsupported metric type")
+	ErrMetricValueNotProvided = errors.New("metric value not provided")
+)
 
 type MetricsPage struct {
 	Metrics []*model.Metrics
@@ -28,44 +35,38 @@ func NewMetricsService(st repository.Storage) *MetricsService {
 	}
 }
 
-func (ms *MetricsService) AccumulateCounter(ctx context.Context, id string, inc int64) error {
-	err := ms.storage.AddCounter(ctx, id, inc)
-	if err != nil {
-		return err
+// AccumulateMetric is an aggregated method of updating metric value based on metric type provided
+// for Counter metric it adds delta value to existing metric value (or creates a new one in storage if not exists)
+// for Gauge metric it simply stores gauge value, overwriting an existing one
+func (ms *MetricsService) AccumulateMetric(ctx context.Context, metric *model.Metrics) error {
+	switch metric.MType {
+	case model.Counter:
+		if metric.Delta == nil {
+			return ErrMetricValueNotProvided
+		}
+		return ms.storage.AddCounter(ctx, metric.ID, *metric.Delta)
+	case model.Gauge:
+		if metric.Value == nil {
+			return ErrMetricValueNotProvided
+		}
+		return ms.storage.SetGauge(ctx, metric.ID, *metric.Value)
 	}
 
-	return nil
-}
-
-func (ms *MetricsService) SetGauge(ctx context.Context, id string, val float64) error {
-	err := ms.storage.SetGauge(ctx, id, val)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (ms *MetricsService) GetCounter(ctx context.Context, id string) (*int64, error) {
-	return ms.storage.GetCounter(ctx, id)
-}
-
-func (ms *MetricsService) GetGauge(ctx context.Context, id string) (*float64, error) {
-	return ms.storage.GetGauge(ctx, id)
+	return fmt.Errorf("%w: %s", ErrUnsupportedMetricType, metric.MType)
 }
 
 func (ms *MetricsService) GetMetric(ctx context.Context, id, mtype string) (*model.Metrics, error) {
-	metric, err := ms.storage.GetByID(ctx, id)
+	mi, err := ms.storage.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if metric.MType != mtype {
-		return nil, model.ErrIncorrectAccess
+	if mi.MType != mtype {
+		return nil, repository.ErrIncorrectAccess
 	}
-	return metric, nil
+	return mi, nil
 }
 
-func (ms *MetricsService) BatchSetMetrics(ctx context.Context, metrics []*model.Metrics) error {
+func (ms *MetricsService) BatchAccumulateMetrics(ctx context.Context, metrics []*model.Metrics) error {
 	return ms.storage.BatchUpdate(ctx, metrics)
 }
 

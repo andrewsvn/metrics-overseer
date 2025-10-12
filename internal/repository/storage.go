@@ -12,15 +12,12 @@ import (
 // error is not returned if data is not found in get methods
 
 type Storage interface {
-	GetGauge(ctx context.Context, id string) (*float64, error)
 	SetGauge(ctx context.Context, id string, value float64) error
-
-	GetCounter(ctx context.Context, id string) (*int64, error)
 	AddCounter(ctx context.Context, id string, delta int64) error
 
 	GetByID(ctx context.Context, id string) (*model.Metrics, error)
 
-	// BatchUpdate allows receiving multiple metrics values and store them simultaneously
+	// BatchUpdate allows receiving multiple metrics values and accumulate them simultaneously
 	// if any metric is invalid, all data is discarded, and an error returned on the validation step
 	BatchUpdate(ctx context.Context, metrics []*model.Metrics) error
 
@@ -38,5 +35,6 @@ type Storage interface {
 }
 
 var (
-	ErrMetricNotFound = errors.New("metric not found in storage")
+	ErrMetricNotFound  = errors.New("metric not found in storage")
+	ErrIncorrectAccess = errors.New("wrong access method used for metric")
 )

@@ -2,7 +2,6 @@ package model
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"strconv"
 )
@@ -22,10 +21,6 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"`
 	Hash  string   `json:"-"`
 }
-
-var (
-	ErrIncorrectAccess = errors.New("wrong access method used for metric")
-)
 
 func NewMetrics(id string, mType string, delta *int64, value *float64) *Metrics {
 	m := &Metrics{
@@ -56,47 +51,24 @@ func NewCounterMetrics(id string) *Metrics {
 	return m
 }
 
-func (m *Metrics) Reset() {
-	m.Delta = nil
-	m.Value = nil
-	m.UpdateHash()
-}
-
-func (m *Metrics) GetGauge() (*float64, error) {
-	if m.MType != Gauge {
-		return nil, ErrIncorrectAccess
-	}
-	return m.Value, nil
-}
-
-func (m *Metrics) GetCounter() (*int64, error) {
-	if m.MType != Counter {
-		return nil, ErrIncorrectAccess
-	}
-	return m.Delta, nil
-}
-
-func (m *Metrics) SetGauge(value float64) error {
-	if m.MType != Gauge {
-		return ErrIncorrectAccess
-	}
+func (m *Metrics) SetGauge(value float64) {
 	m.Value = &value
 	m.UpdateHash()
-	return nil
 }
 
-func (m *Metrics) AddCounter(delta int64) error {
-	if m.MType != Counter {
-		return ErrIncorrectAccess
-	}
-
+func (m *Metrics) AddCounter(delta int64) {
 	if m.Delta == nil {
 		m.Delta = &delta
 	} else {
 		*m.Delta += delta
 	}
 	m.UpdateHash()
-	return nil
+}
+
+func (m *Metrics) Reset() {
+	m.Delta = nil
+	m.Value = nil
+	m.UpdateHash()
 }
 
 func (m *Metrics) UpdateHash() {
