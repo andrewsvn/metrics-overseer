@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"time"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
@@ -17,6 +18,7 @@ var metricspage string
 
 type MetricsService struct {
 	storage        repository.Storage
+	auditors       []Auditor
 	allMetricsTmpl *template.Template
 }
 
@@ -35,24 +37,35 @@ func NewMetricsService(st repository.Storage) *MetricsService {
 	}
 }
 
+func (ms *MetricsService) SubscribeAuditor(auditor Auditor) {
+	ms.auditors = append(ms.auditors, auditor)
+}
+
 // AccumulateMetric is an aggregated method of updating metric value based on metric type provided
 // for Counter metric it adds delta value to existing metric value (or creates a new one in storage if not exists)
 // for Gauge metric it simply stores gauge value, overwriting an existing one
-func (ms *MetricsService) AccumulateMetric(ctx context.Context, metric *model.Metrics) error {
+func (ms *MetricsService) AccumulateMetric(ctx context.Context, metric *model.Metrics, ipAddr string) error {
 	switch metric.MType {
 	case model.Counter:
 		if metric.Delta == nil {
 			return ErrMetricValueNotProvided
 		}
-		return ms.storage.AddCounter(ctx, metric.ID, *metric.Delta)
+		if err := ms.storage.AddCounter(ctx, metric.ID, *metric.Delta); err != nil {
+			return fmt.Errorf("unable to update metric: %w", err)
+		}
 	case model.Gauge:
 		if metric.Value == nil {
 			return ErrMetricValueNotProvided
 		}
-		return ms.storage.SetGauge(ctx, metric.ID, *metric.Value)
+		if err := ms.storage.SetGauge(ctx, metric.ID, *metric.Value); err != nil {
+			return fmt.Errorf("unable to update metric: %w", err)
+		}
+	default:
+		return fmt.Errorf("%w: %s", ErrUnsupportedMetricType, metric.MType)
 	}
 
-	return fmt.Errorf("%w: %s", ErrUnsupportedMetricType, metric.MType)
+	ms.notifyAuditors(ipAddr, metric)
+	return nil
 }
 
 func (ms *MetricsService) GetMetric(ctx context.Context, id, mtype string) (*model.Metrics, error) {
@@ -66,8 +79,14 @@ func (ms *MetricsService) GetMetric(ctx context.Context, id, mtype string) (*mod
 	return mi, nil
 }
 
-func (ms *MetricsService) BatchAccumulateMetrics(ctx context.Context, metrics []*model.Metrics) error {
-	return ms.storage.BatchUpdate(ctx, metrics)
+func (ms *MetricsService) BatchAccumulateMetrics(ctx context.Context, metrics []*model.Metrics, ipAddr string) error {
+	err := ms.storage.BatchUpdate(ctx, metrics)
+	if err != nil {
+		return fmt.Errorf("failed to store metric values: %w", err)
+	}
+
+	ms.notifyAuditors(ipAddr, metrics...)
+	return nil
 }
 
 func (ms *MetricsService) GenerateAllMetricsHTML(ctx context.Context, w io.Writer) error {
@@ -93,4 +112,11 @@ func (ms *MetricsService) GenerateAllMetricsHTML(ctx context.Context, w io.Write
 
 func (ms *MetricsService) PingStorage(ctx context.Context) error {
 	return ms.storage.Ping(ctx)
+}
+
+func (ms *MetricsService) notifyAuditors(ipAddr string, metrics ...*model.Metrics) {
+	ts := time.Now()
+	for _, auditor := range ms.auditors {
+		auditor.OnMetricsUpdate(ts, ipAddr, metrics...)
+	}
 }

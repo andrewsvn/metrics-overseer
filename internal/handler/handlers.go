@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -120,7 +121,8 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 			he.Render(rw)
 			return
 		}
-		he = mh.processUpdateMetric(r.Context(), metric)
+
+		he = mh.processUpdateMetric(r.Context(), metric, mh.extractRemoteIPAddress(r))
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -158,7 +160,7 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 			he.Render(rw)
 			return
 		}
-		he = mh.processUpdateMetric(r.Context(), metric)
+		he = mh.processUpdateMetric(r.Context(), metric, mh.extractRemoteIPAddress(r))
 		if he != nil {
 			if he.Error != nil {
 				mh.logger.Error(he.Message, zap.Error(he.Error))
@@ -188,7 +190,7 @@ func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 		mh.logger.Debugw("Trying to update metrics",
 			"count", len(metrics),
 		)
-		err = mh.msrv.BatchAccumulateMetrics(r.Context(), metrics)
+		err = mh.msrv.BatchAccumulateMetrics(r.Context(), metrics, mh.extractRemoteIPAddress(r))
 		if err != nil {
 			if errors.Is(err, repository.ErrIncorrectAccess) {
 				errorhandling.NewValidationHandlerError(err.Error()).Render(rw)
@@ -262,8 +264,12 @@ func (mh *MetricsHandlers) pingStorageHandler() http.HandlerFunc {
 	}
 }
 
-func (mh *MetricsHandlers) processUpdateMetric(ctx context.Context, metric *model.Metrics) *errorhandling.Error {
-	err := mh.msrv.AccumulateMetric(ctx, metric)
+func (mh *MetricsHandlers) processUpdateMetric(
+	ctx context.Context,
+	metric *model.Metrics,
+	ipAddr string,
+) *errorhandling.Error {
+	err := mh.msrv.AccumulateMetric(ctx, metric, ipAddr)
 	if err != nil {
 		if errors.Is(err, service.ErrUnsupportedMetricType) {
 			return errorhandling.NewValidationHandlerError(err.Error())
@@ -383,4 +389,13 @@ func (mh *MetricsHandlers) renderMetricJSON(rw http.ResponseWriter, metric *mode
 	if err != nil {
 		mh.logger.Error(logErrorWriteBody, zap.Error(err))
 	}
+}
+
+func (mh *MetricsHandlers) extractRemoteIPAddress(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		mh.logger.Warnw("error extracting remote IP address", zap.Error(err))
+		return "N/A"
+	}
+	return ip
 }

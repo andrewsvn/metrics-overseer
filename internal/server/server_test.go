@@ -496,11 +496,11 @@ func setupServerWithMemStorage() *httptest.Server {
 
 	cm := model.NewCounterMetrics("cnt1")
 	cm.AddCounter(10)
-	_ = msrv.AccumulateMetric(ctx, cm)
+	_ = msrv.AccumulateMetric(ctx, cm, "")
 
 	gm := model.NewGaugeMetrics("gauge1")
 	gm.SetGauge(3.14)
-	_ = msrv.AccumulateMetric(ctx, gm)
+	_ = msrv.AccumulateMetric(ctx, gm, "")
 
 	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
