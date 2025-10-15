@@ -18,29 +18,36 @@ func TestMemStorageCounters(t *testing.T) {
 	_ = ms.AddCounter(ctx, "cnt1", 3)
 	_ = ms.AddCounter(ctx, "cnt2", 4)
 
-	cnt1, err := ms.GetCounter(ctx, "cnt1")
+	cnt1, err := ms.GetByID(ctx, "cnt1")
 	assert.NoError(t, err)
-	assert.Equal(t, int64(4), *cnt1)
-	cnt2, err := ms.GetCounter(ctx, "cnt2")
+	assert.Equal(t, "cnt1", cnt1.ID)
+	assert.Equal(t, model.Counter, cnt1.MType)
+	assert.Equal(t, int64(4), *cnt1.Delta)
+	assert.Nil(t, cnt1.Value)
+
+	cnt2, err := ms.GetByID(ctx, "cnt2")
 	assert.NoError(t, err)
-	assert.Equal(t, int64(6), *cnt2)
-	_, err = ms.GetCounter(ctx, "cnt3")
+	assert.Equal(t, "cnt2", cnt2.ID)
+	assert.Equal(t, model.Counter, cnt2.MType)
+	assert.Equal(t, int64(6), *cnt2.Delta)
+	assert.Nil(t, cnt2.Value)
+
+	_, err = ms.GetByID(ctx, "cnt3")
 	assert.ErrorAs(t, err, &ErrMetricNotFound)
 
 	_ = ms.AddCounter(ctx, "cnt1", -2)
 	_ = ms.AddCounter(ctx, "cnt2", -8)
-	cnt1, _ = ms.GetCounter(ctx, "cnt1")
-	assert.Equal(t, int64(2), *cnt1)
-	cnt2, _ = ms.GetCounter(ctx, "cnt2")
-	assert.Equal(t, int64(-2), *cnt2)
 
-	_, err = ms.GetGauge(ctx, "cnt1")
-	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
+	cnt1, _ = ms.GetByID(ctx, "cnt1")
+	assert.Equal(t, int64(2), *cnt1.Delta)
+	cnt2, _ = ms.GetByID(ctx, "cnt2")
+	assert.Equal(t, int64(-2), *cnt2.Delta)
 
 	err = ms.ResetAll(ctx)
 	require.NoError(t, err)
-	cnt1, _ = ms.GetCounter(ctx, "cnt1")
-	assert.Nil(t, cnt1)
+	cnt1, err = ms.GetByID(ctx, "cnt1")
+	assert.NoError(t, err)
+	assert.Nil(t, cnt1.Delta)
 }
 
 func TestMemStorageGauges(t *testing.T) {
@@ -50,24 +57,28 @@ func TestMemStorageGauges(t *testing.T) {
 	_ = ms.SetGauge(ctx, "gauge1", 1.11)
 	_ = ms.SetGauge(ctx, "gauge2", 3.33)
 
-	g1, err := ms.GetGauge(ctx, "gauge1")
+	g1, err := ms.GetByID(ctx, "gauge1")
 	assert.NoError(t, err)
-	assert.Equal(t, 1.11, *g1)
-	g2, err := ms.GetGauge(ctx, "gauge2")
+	assert.Equal(t, "gauge1", g1.ID)
+	assert.Equal(t, model.Gauge, g1.MType)
+	assert.Equal(t, 1.11, *g1.Value)
+	assert.Nil(t, g1.Delta)
+
+	g2, err := ms.GetByID(ctx, "gauge2")
 	assert.NoError(t, err)
-	assert.Equal(t, 3.33, *g2)
-	_, err = ms.GetGauge(ctx, "gauge3")
+	assert.Equal(t, "gauge2", g2.ID)
+	assert.Equal(t, model.Gauge, g2.MType)
+	assert.Equal(t, 3.33, *g2.Value)
+
+	_, err = ms.GetByID(ctx, "gauge3")
 	assert.ErrorAs(t, err, &ErrMetricNotFound)
 
 	_ = ms.SetGauge(ctx, "gauge1", 0.0)
 	_ = ms.SetGauge(ctx, "gauge2", -2.22)
-	g1, _ = ms.GetGauge(ctx, "gauge1")
-	assert.Equal(t, 0.0, *g1)
-	g2, _ = ms.GetGauge(ctx, "gauge2")
-	assert.Equal(t, -2.22, *g2)
-
-	_, err = ms.GetCounter(ctx, "gauge1")
-	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
+	g1, _ = ms.GetByID(ctx, "gauge1")
+	assert.Equal(t, 0.0, *g1.Value)
+	g2, _ = ms.GetByID(ctx, "gauge2")
+	assert.Equal(t, -2.22, *g2.Value)
 }
 
 func TestMemStorageGetAll(t *testing.T) {
@@ -97,29 +108,4 @@ func TestMemStorageGetAll(t *testing.T) {
 	assert.Equal(t, "0gauge0", metrics[1].ID)
 	assert.Equal(t, "2cnt2", metrics[4].ID)
 	assert.Equal(t, "2gauge2", metrics[5].ID)
-}
-
-func TestMemStorageGetByID(t *testing.T) {
-	ms := NewMemStorage()
-	ctx := context.Background()
-
-	_ = ms.SetGauge(ctx, "gauge1", 1.11)
-	_ = ms.AddCounter(ctx, "cnt1", 1)
-
-	metric, err := ms.GetByID(ctx, "cnt1")
-	require.NoError(t, err)
-	assert.Equal(t, "cnt1", metric.ID)
-	assert.Equal(t, model.Counter, metric.MType)
-	assert.Equal(t, int64(1), *metric.Delta)
-	assert.Nil(t, metric.Value)
-
-	metric, err = ms.GetByID(ctx, "gauge1")
-	require.NoError(t, err)
-	assert.Equal(t, "gauge1", metric.ID)
-	assert.Equal(t, model.Gauge, metric.MType)
-	assert.Equal(t, 1.11, *metric.Value)
-	assert.Nil(t, metric.Delta)
-
-	_, err = ms.GetByID(ctx, "cnt2")
-	require.ErrorAs(t, err, &ErrMetricNotFound)
 }

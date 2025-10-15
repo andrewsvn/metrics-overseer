@@ -3,6 +3,7 @@ package servercfg
 import (
 	"flag"
 	"fmt"
+
 	"github.com/caarlos0/env/v6"
 )
 
@@ -41,11 +42,17 @@ type SecurityConfig struct {
 	SecretKey string `env:"KEY"`
 }
 
+type AuditConfig struct {
+	AuditFilePath string `env:"AUDIT_FILE"`
+	AuditURL      string `env:"AUDIT_URL"`
+}
+
 type Config struct {
 	FileStorageConfig
 	DatabaseConfig
 	PostgresRetryConfig
 	SecurityConfig
+	AuditConfig
 
 	LogLevel       string `env:"SERVER_LOG_LEVEL" default:"info"`
 	Addr           string `env:"ADDRESS"`
@@ -78,4 +85,9 @@ func (cfg *Config) bindFlags() {
 
 	flag.StringVar(&cfg.SecretKey, "k", "",
 		"secret key for verifying requests and signing responses")
+
+	flag.StringVar(&cfg.AuditFilePath, "audit-file", "",
+		"audit file path (should be specified to enable file audit)")
+	flag.StringVar(&cfg.AuditURL, "audit-url", "",
+		"audit url (should be specified to enable http service audit)")
 }
