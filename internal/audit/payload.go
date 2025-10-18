@@ -15,9 +15,9 @@ type Payload struct {
 }
 
 func NewPayload(ts time.Time, ipAddr string, metrics ...*model.Metrics) *Payload {
-	names := make([]string, len(metrics))
-	for i, m := range metrics {
-		names[i] = m.ID
+	names := make([]string, 0)
+	for _, m := range metrics {
+		names = append(names, m.ID)
 	}
 
 	return &Payload{

@@ -104,7 +104,7 @@ func (ms *MemStorage) GetAllSorted(_ context.Context) ([]*model.Metrics, error) 
 	ms.mutex.RLock()
 	defer ms.mutex.RUnlock()
 
-	mlist := make([]*model.Metrics, 0, len(ms.data))
+	mlist := make([]*model.Metrics, 0)
 	for _, v := range ms.data {
 		mlist = append(mlist, v)
 	}
