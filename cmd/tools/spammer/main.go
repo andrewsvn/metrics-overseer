@@ -33,7 +33,7 @@ func main() {
 	flag.IntVar(&nWorkers, "w", 10, "Number of workers")
 	flag.IntVar(&batchSize, "b", 10, "Batch size")
 	flag.IntVar(&sendIntervalMs, "i", 500, "Interval between sends in milliseconds")
-	flag.IntVar(&checkIntervalMs, "c", 500, "Interval between checks in milliseconds")
+	flag.IntVar(&checkIntervalMs, "c", 0, "Interval between checks in milliseconds (checks omitted if 0)")
 	flag.Parse()
 
 	sendInterval = time.Duration(sendIntervalMs) * time.Millisecond
@@ -63,7 +63,9 @@ func main() {
 	}
 
 	// checker - to check storage read, serialization and compressing
-	go checker(ctx, l)
+	if checkIntervalMs > 0 {
+		go checker(ctx, l)
+	}
 
 	<-stop
 	done()
@@ -124,7 +126,8 @@ func checker(ctx context.Context, l *zap.Logger) {
 		}
 
 		req := cl.R()
-		req.Header.Add("Accept-Encoding", "gzip")
+		// no gzip to disable compress benchmarking
+		//req.Header.Add("Accept-Encoding", "gzip")
 		_, err := req.Get(url)
 		if err != nil {
 			l.Error("error checking metrics", zap.Error(err))
