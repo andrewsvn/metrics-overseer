@@ -20,6 +20,8 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
+
+	_ "net/http/pprof"
 )
 
 func Run() error {
@@ -75,6 +77,17 @@ func Run() error {
 			logger.Fatal("failed to start server", zap.Error(err))
 		}
 	}()
+
+	// pprof server
+	if cfg.PprofAddr != "" {
+		go func() {
+			logger.Sugar().Infow("starting pprof handlers",
+				"address", cfg.PprofAddr)
+			if err := http.ListenAndServe(cfg.PprofAddr, nil); err != nil {
+				logger.Fatal("failed to start pprof", zap.Error(err))
+			}
+		}()
+	}
 
 	<-stop
 	logger.Info("shutting down metric-overseer server...")

@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -71,5 +72,22 @@ func TestFileWriterOnMetricsUpdate(t *testing.T) {
 		assert.Equal(t, event.ipAddr, payload.IPAddress)
 		assert.Equal(t, len(event.metrics), len(payload.MetricNames))
 		assert.Equal(t, event.metrics[0].ID, payload.MetricNames[0])
+	}
+}
+
+func BenchmarkFileWriterOnMetricsUpdate(b *testing.B) {
+	b.StopTimer()
+	l, _ := logging.NewZapLogger("info")
+	fsw := NewFileWriter("fswtest.txt", l)
+	defer os.Remove(fsw.filename)
+
+	metrics := make([]*model.Metrics, 10)
+	for i := 0; i < 10; i++ {
+		metrics[i] = model.NewCounterMetrics(fmt.Sprintf("cnt%d", i))
+	}
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		fsw.OnMetricsUpdate(time.Now(), "127.0.0.1", metrics...)
 	}
 }

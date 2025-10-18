@@ -51,6 +51,26 @@ func NewCounterMetrics(id string) *Metrics {
 	return m
 }
 
+func NewGaugeMetricsWithValue(id string, value float64) *Metrics {
+	m := &Metrics{
+		ID:    id,
+		MType: Gauge,
+		Value: &value,
+	}
+	m.UpdateHash()
+	return m
+}
+
+func NewCounterMetricsWithDelta(id string, delta int64) *Metrics {
+	m := &Metrics{
+		ID:    id,
+		MType: Counter,
+		Delta: &delta,
+	}
+	m.UpdateHash()
+	return m
+}
+
 func (m *Metrics) SetGauge(value float64) {
 	m.Value = &value
 	m.UpdateHash()

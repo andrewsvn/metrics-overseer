@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
@@ -108,4 +109,70 @@ func TestMemStorageGetAll(t *testing.T) {
 	assert.Equal(t, "0gauge0", metrics[1].ID)
 	assert.Equal(t, "2cnt2", metrics[4].ID)
 	assert.Equal(t, "2gauge2", metrics[5].ID)
+}
+
+func BenchmarkMemStorageAddCounter(b *testing.B) {
+	b.StopTimer()
+	ms := setupMemStorageForBenchmark()
+	ctx := context.Background()
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = ms.AddCounter(ctx, "cnt255", 5)
+	}
+}
+
+func BenchmarkMemStorageSetGauge(b *testing.B) {
+	b.StopTimer()
+	ms := setupMemStorageForBenchmark()
+	ctx := context.Background()
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = ms.SetGauge(ctx, "gauge511", 3.14)
+	}
+}
+
+func BenchmarkMemStorageGetAll(b *testing.B) {
+	b.StopTimer()
+	ms := setupMemStorageForBenchmark()
+	ctx := context.Background()
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		batch, _ := ms.GetAllSorted(ctx)
+		_ = batch
+	}
+}
+
+func BenchmarkMemStorageBatchUpdate(b *testing.B) {
+	b.StopTimer()
+	ctx := context.Background()
+	metrics := makeMetricsBatch()
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		ms := NewMemStorage()
+		_ = ms.BatchUpdate(ctx, metrics)
+	}
+}
+
+func setupMemStorageForBenchmark() *MemStorage {
+	ms := NewMemStorage()
+	_ = ms.SetAll(context.Background(), makeMetricsBatch())
+	return ms
+}
+
+func makeMetricsBatch() []*model.Metrics {
+	metrics := make([]*model.Metrics, 0, 20000)
+	for i := 0; i < 10000; i++ {
+		m := model.NewCounterMetrics(fmt.Sprintf("cnt%d", i))
+		m.AddCounter(int64(i))
+		metrics = append(metrics, m)
+
+		m = model.NewGaugeMetrics(fmt.Sprintf("gauge%d", i))
+		m.SetGauge(1.5 * float64(i))
+		metrics = append(metrics, m)
+	}
+	return metrics
 }
