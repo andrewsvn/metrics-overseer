@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
+
+	"github.com/andrewsvn/metrics-overseer/internal/audit"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/handler"
@@ -13,11 +20,8 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
-	"net/http"
-	"os"
-	"os/signal"
-	"strings"
-	"time"
+
+	_ "net/http/pprof"
 )
 
 func Run() error {
@@ -30,16 +34,29 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("can't initialize logger: %w", err)
 	}
+	sl := logger.Sugar()
 
 	stor, err := InitializeStorage(cfg, logger)
 	if err != nil {
 		return fmt.Errorf("can't initialize storage: %w", err)
 	}
 	defer func() {
-
+		err := stor.Close()
+		if err != nil {
+			sl.Errorw("Failed to close metrics storage", "error", err)
+		}
 	}()
 
 	msrv := service.NewMetricsService(stor)
+	if cfg.AuditFilePath != "" {
+		sl.Infow("subscribing file auditor", "path", cfg.AuditFilePath)
+		msrv.SubscribeAuditor(audit.NewFileWriter(cfg.AuditFilePath, logger))
+	}
+	if cfg.AuditURL != "" {
+		sl.Infow("subscribing http service auditor", "url", cfg.AuditURL)
+		msrv.SubscribeAuditor(audit.NewHTTPWriter(cfg.AuditURL, logger))
+	}
+
 	mhandlers := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
 	r := mhandlers.GetRouter()
 
@@ -60,6 +77,17 @@ func Run() error {
 			logger.Fatal("failed to start server", zap.Error(err))
 		}
 	}()
+
+	// pprof server
+	if cfg.PprofAddr != "" {
+		go func() {
+			logger.Sugar().Infow("starting pprof handlers",
+				"address", cfg.PprofAddr)
+			if err := http.ListenAndServe(cfg.PprofAddr, nil); err != nil {
+				logger.Fatal("failed to start pprof", zap.Error(err))
+			}
+		}()
+	}
 
 	<-stop
 	logger.Info("shutting down metric-overseer server...")

@@ -3,8 +3,9 @@ package accumulation
 import (
 	"errors"
 	"fmt"
-	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"sync"
+
+	"github.com/andrewsvn/metrics-overseer/internal/model"
 )
 
 // Accumulator manages metric lifecycle between pollings and sendings
@@ -32,8 +33,9 @@ type MetricAccumulator struct {
 }
 
 var (
-	ErrUnknownMetricType = errors.New("unknown metric type")
-	ErrWrongStagingState = errors.New("incorrect operation for current staging state")
+	ErrIncorrectMetricType = errors.New("incorrect metric type")
+	ErrUnknownMetricType   = errors.New("unknown metric type")
+	ErrWrongStagingState   = errors.New("incorrect operation for current staging state")
 )
 
 func NewMetricAccumulator(id string) *MetricAccumulator {
@@ -48,7 +50,7 @@ func (ma *MetricAccumulator) AccumulateCounter(inc int64) error {
 	}
 
 	if ma.MType != model.Counter {
-		return fmt.Errorf("%w: expected counter, got %v", model.ErrIncorrectAccess, ma.MType)
+		return fmt.Errorf("%w: expected counter, got %v", ErrIncorrectMetricType, ma.MType)
 	}
 
 	ma.mutex.Lock()
@@ -68,7 +70,7 @@ func (ma *MetricAccumulator) AccumulateGauge(value float64) error {
 	}
 
 	if ma.MType != model.Gauge {
-		return fmt.Errorf("%w: expected gauge, got %v", model.ErrIncorrectAccess, ma.MType)
+		return fmt.Errorf("%w: expected gauge, got %v", ErrIncorrectMetricType, ma.MType)
 	}
 
 	ma.mutex.Lock()
