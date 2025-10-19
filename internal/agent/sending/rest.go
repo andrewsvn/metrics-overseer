@@ -44,7 +44,7 @@ func NewRestSender(
 
 	retrier := retrying.NewExecutorBuilder(retryPolicy).
 		WithLogger(restLogger, "sending metrics").
-		Executor()
+		Build()
 
 	rs := &RestSender{
 		addr:      enrichedAddr,

@@ -45,7 +45,7 @@ func NewPostgresDBStorage(conn db.Connection, logger *zap.Logger, retryPolicy re
 	retrier := retrying.NewExecutorBuilder(retryPolicy).
 		WithLogger(pgLogger, "executing query").
 		WithRetryablePredicate(isPgErrorRetryable).
-		Executor()
+		Build()
 
 	return &PostgresDBStorage{
 		conn:    conn,

@@ -1,8 +1,11 @@
+// Package agentcfg contains possible customization for metrics-overseer agent behavior
+// in form of environment variables and flags
 package agentcfg
 
 import (
 	"flag"
 	"fmt"
+
 	"github.com/caarlos0/env/v6"
 )
 
@@ -14,16 +17,20 @@ const (
 	defaultLogLevel          = "info"
 )
 
+// ReportRetryConfig contains retry policy configuration for metrics reporting to metrics-overseer server
 type ReportRetryConfig struct {
 	MaxRetryCount          int `env:"REPORT_RETRY_COUNT" envDefault:"3"`
 	InitialRetryDelaySec   int `env:"REPORT_INITIAL_RETRY_DELAY" envDefault:"1"`
 	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT" envDefault:"2"`
 }
 
+// ReportingConfig contains settings for simultaneous sending of metrics to metrics-overseer server
+// used by agent/reporting package methods
 type ReportingConfig struct {
 	MaxNumberOfRequests int `env:"RATE_LIMIT"`
 }
 
+// Config embeds all agent configuration properties to be set by env.Parse or flag.Parse and be used in agent code
 type Config struct {
 	ReportingConfig
 	ReportRetryConfig
@@ -36,6 +43,8 @@ type Config struct {
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
+// Read is used to initialize agent Config from environment variables and/or flags. Environment variables have higher
+// priority than flags, so they are parsed later
 func Read() (*Config, error) {
 	cfg := &Config{}
 	cfg.bindFlags()
@@ -44,6 +53,7 @@ func Read() (*Config, error) {
 	return cfg, err
 }
 
+// Default config can be used for tests that require to initialize certain agent components with config values
 func Default() *Config {
 	cfg := &Config{
 		ReportRetryConfig: ReportRetryConfig{
