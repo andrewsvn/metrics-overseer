@@ -1,0 +1,401 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Service for collecting and providing performance metrics from other services",
+        "title": "Metrics Overseer API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "metrics-overseer:8080",
+    "basePath": "/",
+    "paths": {
+        "/": {
+            "get": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Renders metrics page containing table with all collected metrics and their values - sorted alphabetically",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Render overall collected metrics page",
+                "operationId": "uiMetricsPage",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.MetricsPage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/ping": {
+            "get": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Returns success response in case underlying storage database connection is working.",
+                "tags": [
+                    "Maintenance"
+                ],
+                "summary": "Check storage for availability",
+                "operationId": "pingStorage",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/update": {
+            "post": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Accumulate metric value for id and metric type provided in body",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Accumulate single metric value provided in JSON body",
+                "operationId": "updateMetricByBody",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/update/{mtype}/{id}/{value}": {
+            "post": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Accumulate metric value for ID and metric type provided in parameters",
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Accumulate single metric value provided by path parameters",
+                "operationId": "updateMetricByPath",
+                "parameters": [
+                    {
+                        "enum": [
+                            "Counter",
+                            "Gauge"
+                        ],
+                        "type": "string",
+                        "description": "Metric Type",
+                        "name": "mtype",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric Value",
+                        "name": "value",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/updates": {
+            "post": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Accumulate batch of metric values for corresponding ids and metric types provided in body as array",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Accumulate multiple metric value provided in JSON array",
+                "operationId": "updateMetricBatch",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/value": {
+            "post": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Return metric value for ID and metric type provided in JSON body if it exists",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Return metric value by JSON parameters",
+                "operationId": "getMetricByBody",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Metric not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/value/{mtype}/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "SecretKeyAuth": []
+                    }
+                ],
+                "description": "Return metric value for ID and metric type provided in path parameters if it exists",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Return metric value by ID and type",
+                "operationId": "getMetricByPath",
+                "parameters": [
+                    {
+                        "enum": [
+                            "Counter",
+                            "Gauge"
+                        ],
+                        "type": "string",
+                        "description": "Metric Type",
+                        "name": "mtype",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Metric not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "model.Metrics": {
+            "type": "object",
+            "properties": {
+                "delta": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "service.MetricsPage": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Metrics"
+                    }
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "SecretKeyAuth": {
+            "type": "apiKey",
+            "name": "signAuth",
+            "in": "Header"
+        }
+    },
+    "tags": [
+        {
+            "description": "endpoints group for controlling and providing inner service state",
+            "name": "Maintenance"
+        },
+        {
+            "description": "endpoints group for working with metrics",
+            "name": "Metrics"
+        },
+        {
+            "description": "endpoints group for rendering HTML pages",
+            "name": "UI"
+        }
+    ]
+}

@@ -23,6 +23,26 @@ import (
 	"go.uber.org/zap"
 )
 
+// @Title Metrics Overseer API
+// @Description Service for collecting and providing performance metrics from other services
+// @Version 1.0
+
+// @BasePath /
+// @Host metrics-overseer:8080
+
+// @SecurityDefinitions.apikey SecretKeyAuth
+// @In Header
+// @Name signAuth
+
+// @Tag.name Maintenance
+// @Tag.description endpoints group for controlling and providing inner service state
+
+// @Tag.name Metrics
+// @Tag.description endpoints group for working with metrics
+
+// @Tag.name UI
+// @Tag.description endpoints group for rendering HTML pages
+
 type MetricsHandlers struct {
 	msrv        *service.MetricsService
 	decomp      *compress.Decompressor
@@ -74,12 +94,25 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r.Route("/ping", func(r chi.Router) {
 		r.Get("/", mh.pingStorageHandler())
 	})
-	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
+
+	// UI
 	r.Get("/", mh.showMetricsPage())
+
+	// ping storage
+	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
 
 	return r
 }
 
+// @Tags UI
+// @Summary Render overall collected metrics page
+// @Description Renders metrics page containing table with all collected metrics and their values - sorted alphabetically
+// @ID uiMetricsPage
+// @Produce html
+// @Success 200 {object} service.MetricsPage
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router / [get]
 func (mh *MetricsHandlers) showMetricsPage() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		pageWriter := new(bytes.Buffer)
@@ -102,6 +135,19 @@ func (mh *MetricsHandlers) showMetricsPage() http.HandlerFunc {
 	}
 }
 
+// @Tags Metrics
+// @Summary Accumulate single metric value provided by path parameters
+// @Description Accumulate metric value for ID and metric type provided in parameters
+// @ID updateMetricByPath
+// @Param mtype path string true "Metric Type" Enums(Counter, Gauge)
+// @Param id path string true "Metric ID"
+// @Param value path string true "Metric Value"
+// @Success 200
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /update/{mtype}/{id}/{value} [post]
 func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
@@ -135,6 +181,18 @@ func (mh *MetricsHandlers) updateByPathHandler() http.HandlerFunc {
 	}
 }
 
+// @Tags Metrics
+// @Summary Accumulate single metric value provided in JSON body
+// @Description Accumulate metric value for id and metric type provided in body
+// @ID updateMetricByBody
+// @Accept json
+// @Body {object} model.Metrics
+// @Success 200
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /update [post]
 func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		body, err := mh.decomp.ReadRequestBody(r)
@@ -173,6 +231,18 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 	}
 }
 
+// @Tags Metrics
+// @Summary Accumulate multiple metric value provided in JSON array
+// @Description Accumulate batch of metric values for corresponding ids and metric types provided in body as array
+// @ID updateMetricBatch
+// @Accept json
+// @Body {array} model.Metrics
+// @Success 200
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /updates [post]
 func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		body, err := mh.decomp.ReadRequestBody(r)
@@ -201,6 +271,20 @@ func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 	}
 }
 
+// @Tags Metrics
+// @Summary Return metric value by ID and type
+// @Description Return metric value for ID and metric type provided in path parameters if it exists
+// @ID getMetricByPath
+// @Produce plain
+// @Param mtype path string true "Metric Type" Enums(Counter, Gauge)
+// @Param id path string true "Metric ID"
+// @Success 200 {string} metric value
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 404 {string} string "Metric not found"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /value/{mtype}/{id} [get]
 func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		mtype := chi.URLParam(r, "mtype")
@@ -222,6 +306,20 @@ func (mh *MetricsHandlers) getPlainValueHandler() http.HandlerFunc {
 	}
 }
 
+// @Tags Metrics
+// @Summary Return metric value by JSON parameters
+// @Description Return metric value for ID and metric type provided in JSON body if it exists
+// @ID getMetricByBody
+// @Produce json
+// @Accept json
+// @Body {object} model.Metrics
+// @Success 200 {string} metric value
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 404 {string} string "Metric not found"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /value [post]
 func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		body, err := mh.decomp.ReadRequestBody(r)
@@ -252,6 +350,18 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 	}
 }
 
+// @Tags Maintenance
+// @Summary Check storage for availability
+// @Description Returns success response in case underlying storage database connection is working.
+//
+//	For memory-based storage types always returns success.
+//
+// @ID pingStorage
+// @Success 200 {string} metric value
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "Internal server error"
+// @Security SecretKeyAuth
+// @Router /ping [get]
 func (mh *MetricsHandlers) pingStorageHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		err := mh.msrv.PingStorage(r.Context())

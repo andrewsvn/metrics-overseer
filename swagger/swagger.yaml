@@ -1,0 +1,263 @@
+basePath: /
+definitions:
+  model.Metrics:
+    properties:
+      delta:
+        type: integer
+      id:
+        type: string
+      type:
+        type: string
+      value:
+        type: number
+    type: object
+  service.MetricsPage:
+    properties:
+      metrics:
+        items:
+          $ref: '#/definitions/model.Metrics'
+        type: array
+    type: object
+host: metrics-overseer:8080
+info:
+  contact: {}
+  description: Service for collecting and providing performance metrics from other
+    services
+  title: Metrics Overseer API
+  version: "1.0"
+paths:
+  /:
+    get:
+      description: Renders metrics page containing table with all collected metrics
+        and their values - sorted alphabetically
+      operationId: uiMetricsPage
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.MetricsPage'
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Render overall collected metrics page
+      tags:
+      - UI
+  /ping:
+    get:
+      description: Returns success response in case underlying storage database connection
+        is working.
+      operationId: pingStorage
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Check storage for availability
+      tags:
+      - Maintenance
+  /update:
+    post:
+      consumes:
+      - application/json
+      description: Accumulate metric value for id and metric type provided in body
+      operationId: updateMetricByBody
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Accumulate single metric value provided in JSON body
+      tags:
+      - Metrics
+  /update/{mtype}/{id}/{value}:
+    post:
+      description: Accumulate metric value for ID and metric type provided in parameters
+      operationId: updateMetricByPath
+      parameters:
+      - description: Metric Type
+        enum:
+        - Counter
+        - Gauge
+        in: path
+        name: mtype
+        required: true
+        type: string
+      - description: Metric ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Metric Value
+        in: path
+        name: value
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Accumulate single metric value provided by path parameters
+      tags:
+      - Metrics
+  /updates:
+    post:
+      consumes:
+      - application/json
+      description: Accumulate batch of metric values for corresponding ids and metric
+        types provided in body as array
+      operationId: updateMetricBatch
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Accumulate multiple metric value provided in JSON array
+      tags:
+      - Metrics
+  /value:
+    post:
+      consumes:
+      - application/json
+      description: Return metric value for ID and metric type provided in JSON body
+        if it exists
+      operationId: getMetricByBody
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Metric not found
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Return metric value by JSON parameters
+      tags:
+      - Metrics
+  /value/{mtype}/{id}:
+    get:
+      description: Return metric value for ID and metric type provided in path parameters
+        if it exists
+      operationId: getMetricByPath
+      parameters:
+      - description: Metric Type
+        enum:
+        - Counter
+        - Gauge
+        in: path
+        name: mtype
+        required: true
+        type: string
+      - description: Metric ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Metric not found
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - SecretKeyAuth: []
+      summary: Return metric value by ID and type
+      tags:
+      - Metrics
+securityDefinitions:
+  SecretKeyAuth:
+    in: Header
+    name: signAuth
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: endpoints group for controlling and providing inner service state
+  name: Maintenance
+- description: endpoints group for working with metrics
+  name: Metrics
+- description: endpoints group for rendering HTML pages
+  name: UI
