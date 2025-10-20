@@ -1,16 +1,20 @@
+// Spammer is a simple tool that can spam metrics-overseer server with a lot of simultaneous requests
+// with metric updates and optional metrics page requests
+// see spammercfg.Config for configurable parameters and flags
 package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"time"
 
+	"math/rand/v2"
+
 	"github.com/andrewsvn/metrics-overseer/internal/agent/sending"
+	"github.com/andrewsvn/metrics-overseer/internal/config/spammercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
@@ -18,33 +22,15 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	url             string
-	nWorkers        int
-	batchSize       int
-	sendIntervalMs  int
-	sendInterval    time.Duration
-	checkIntervalMs int
-	checkInterval   time.Duration
-)
-
 func main() {
-	flag.StringVar(&url, "url", "http://localhost:8080", "URL to send metrics to")
-	flag.IntVar(&nWorkers, "w", 10, "Number of workers")
-	flag.IntVar(&batchSize, "b", 10, "Batch size")
-	flag.IntVar(&sendIntervalMs, "i", 500, "Interval between sends in milliseconds")
-	flag.IntVar(&checkIntervalMs, "c", 0, "Interval between checks in milliseconds (checks omitted if 0)")
-	flag.Parse()
-
-	sendInterval = time.Duration(sendIntervalMs) * time.Millisecond
-	checkInterval = time.Duration(checkIntervalMs) * time.Millisecond
+	cfg := spammercfg.Read()
 
 	l, err := logging.NewZapLogger("error")
 	if err != nil {
 		log.Fatalf("error initializing logger: %v", err)
 	}
 
-	sender, err := sending.NewRestSender(url, &retrying.NoRetryPolicy{}, "", l)
+	sender, err := sending.NewRestSender(cfg.URL, &retrying.NoRetryPolicy{}, "", l)
 	if err != nil {
 		log.Fatalf("error initializing sender: %v", err)
 	}
@@ -54,17 +40,18 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 
-	l.Info("starting metrics spammer", zap.String("url", url), zap.Int("workersCount", nWorkers),
-		zap.Int("batchSize", batchSize), zap.Int("sendIntervalMs", sendIntervalMs))
+	l.Info("starting metrics spammer", zap.String("url", cfg.URL), zap.Int("workersCount", cfg.NumWorkers),
+		zap.Int("batchSize", cfg.BatchSize), zap.Int("sendIntervalMs", cfg.SendMetricsIntervalMs),
+		zap.Int("getPageIntervalMs", cfg.GetMetricsPageIntervalMs))
 
 	// senders - to check storage write
-	for i := 0; i < nWorkers; i++ {
-		go worker(ctx, sender, l)
+	for i := 0; i < cfg.NumWorkers; i++ {
+		go worker(ctx, cfg, sender, l)
 	}
 
 	// checker - to check storage read, serialization and compressing
-	if checkIntervalMs > 0 {
-		go checker(ctx, l)
+	if cfg.GetMetricsPageIntervalMs > 0 {
+		go checker(ctx, cfg, l)
 	}
 
 	<-stop
@@ -72,8 +59,10 @@ func main() {
 	l.Info("stopping metrics spammer")
 }
 
-func worker(ctx context.Context, sender *sending.RestSender, l *zap.Logger) {
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+func worker(ctx context.Context, cfg *spammercfg.Config, sender *sending.RestSender, l *zap.Logger) {
+	sendInterval := time.Duration(cfg.SendMetricsIntervalMs) * time.Millisecond
+	rnd := rand.NewPCG(uint64(time.Now().UnixNano()), 0x8eed)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -81,8 +70,8 @@ func worker(ctx context.Context, sender *sending.RestSender, l *zap.Logger) {
 		default:
 		}
 
-		if batchSize > 1 {
-			err := sendBatch(sender, rnd, batchSize)
+		if cfg.BatchSize > 1 {
+			err := sendBatch(sender, rnd, cfg.BatchSize)
 			if err != nil {
 				l.Error("error sending batch", zap.Error(err))
 			}
@@ -96,7 +85,7 @@ func worker(ctx context.Context, sender *sending.RestSender, l *zap.Logger) {
 	}
 }
 
-func sendBatch(sender *sending.RestSender, rnd *rand.Rand, batchSize int) error {
+func sendBatch(sender *sending.RestSender, rnd *rand.PCG, batchSize int) error {
 	metrics := make([]*model.Metrics, batchSize)
 	for i := 0; i < batchSize; i++ {
 		metrics[i] = generateMetric(rnd)
@@ -104,20 +93,22 @@ func sendBatch(sender *sending.RestSender, rnd *rand.Rand, batchSize int) error 
 	return sender.SendMetricArray(metrics)
 }
 
-func sendSingle(sender *sending.RestSender, rnd *rand.Rand) error {
+func sendSingle(sender *sending.RestSender, rnd *rand.PCG) error {
 	metric := generateMetric(rnd)
 	return sender.SendMetric(metric)
 }
 
-func generateMetric(rnd *rand.Rand) *model.Metrics {
+func generateMetric(rnd *rand.PCG) *model.Metrics {
 	return model.NewCounterMetricsWithDelta(
-		fmt.Sprintf("cnt_%d", rnd.Int63()),
-		rnd.Int63n(100),
+		fmt.Sprintf("cnt_%d", rnd.Uint64()),
+		int64(rnd.Uint64()%100),
 	)
 }
 
-func checker(ctx context.Context, l *zap.Logger) {
+func checker(ctx context.Context, cfg *spammercfg.Config, l *zap.Logger) {
+	getPageInterval := time.Duration(cfg.GetMetricsPageIntervalMs) * time.Millisecond
 	cl := resty.New()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -126,13 +117,12 @@ func checker(ctx context.Context, l *zap.Logger) {
 		}
 
 		req := cl.R()
-		// no gzip to disable compress benchmarking
-		//req.Header.Add("Accept-Encoding", "gzip")
-		_, err := req.Get(url)
+		// no gzip here to disable compress benchmarking
+		_, err := req.Get(cfg.URL)
 		if err != nil {
 			l.Error("error checking metrics", zap.Error(err))
 		}
 
-		time.Sleep(checkInterval)
+		time.Sleep(getPageInterval)
 	}
 }
