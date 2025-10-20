@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"go.uber.org/zap"
-	"os"
-	"time"
 )
 
 var (
@@ -157,8 +158,8 @@ func (fst *FileStorage) store(ctx context.Context) error {
 func (fst *FileStorage) serializeMetrics(metrics []*model.Metrics) ([]byte, error) {
 	data := []byte("[\n")
 
-	for i, metric := range metrics {
-		bytes, err := json.Marshal(metric)
+	for i, mi := range metrics {
+		bytes, err := json.Marshal(mi)
 		if err != nil {
 			return nil, err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/Masterminds/squirrel"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
@@ -44,7 +45,7 @@ func NewPostgresDBStorage(conn db.Connection, logger *zap.Logger, retryPolicy re
 	retrier := retrying.NewExecutorBuilder(retryPolicy).
 		WithLogger(pgLogger, "executing query").
 		WithRetryablePredicate(isPgErrorRetryable).
-		Executor()
+		Build()
 
 	return &PostgresDBStorage{
 		conn:    conn,
@@ -52,14 +53,6 @@ func NewPostgresDBStorage(conn db.Connection, logger *zap.Logger, retryPolicy re
 		retrier: retrier,
 		logger:  pgLogger,
 	}
-}
-
-func (pgs *PostgresDBStorage) GetGauge(ctx context.Context, id string) (*float64, error) {
-	m, err := pgs.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return m.GetGauge()
 }
 
 func (pgs *PostgresDBStorage) SetGauge(ctx context.Context, id string, value float64) error {
@@ -90,17 +83,9 @@ func (pgs *PostgresDBStorage) SetGauge(ctx context.Context, id string, value flo
 	}
 
 	if res.RowsAffected() == 0 {
-		return model.ErrIncorrectAccess
+		return ErrIncorrectAccess
 	}
 	return nil
-}
-
-func (pgs *PostgresDBStorage) GetCounter(ctx context.Context, id string) (*int64, error) {
-	m, err := pgs.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return m.GetCounter()
 }
 
 func (pgs *PostgresDBStorage) AddCounter(ctx context.Context, id string, delta int64) error {
@@ -131,7 +116,7 @@ func (pgs *PostgresDBStorage) AddCounter(ctx context.Context, id string, delta i
 	}
 
 	if res.RowsAffected() == 0 {
-		return model.ErrIncorrectAccess
+		return ErrIncorrectAccess
 	}
 	return nil
 }
@@ -271,7 +256,7 @@ func (pgs *PostgresDBStorage) batchValidate(ctx context.Context, metrics []*mode
 		mtype, ok := mtypes[metric.ID]
 		if ok && metric.MType != mtype {
 			return fmt.Errorf("%w: for metric id=%s expected=%s, actual=%s",
-				model.ErrIncorrectAccess, metric.ID, mtype, metric.MType)
+				ErrIncorrectAccess, metric.ID, mtype, metric.MType)
 		}
 	}
 	return nil
