@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -63,9 +62,9 @@ func TestHTTPWriterOnMetricsUpdate(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	l, _ := logging.NewZapLogger("info")
-	httpw := NewHTTPWriter(srv.URL, l)
+	httpw := NewHTTPWriter(srv.URL)
 	for _, event := range events {
-		httpw.OnMetricsUpdate(event.timestamp, event.ipAddr, event.metrics...)
+		err := httpw.OnMetricsUpdate(event.timestamp, event.ipAddr, event.metrics...)
+		assert.NoError(t, err)
 	}
 }

@@ -492,7 +492,7 @@ func setupServerWithMemStorage() *httptest.Server {
 	logger, _ := logging.NewZapLogger("info")
 
 	mstor := repository.NewMemStorage()
-	msrv := service.NewMetricsService(mstor)
+	msrv := service.NewMetricsService(mstor, logger)
 
 	cm := model.NewCounterMetrics("cnt1")
 	cm.AddCounter(10)
@@ -511,7 +511,7 @@ func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
 	logger, _ := logging.NewZapLogger("info")
 
 	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
-	msrv := service.NewMetricsService(mstor)
+	msrv := service.NewMetricsService(mstor, logger)
 	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())

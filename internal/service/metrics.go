@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
+	"go.uber.org/zap"
 )
 
 //go:embed resources/metricspage.html
@@ -20,6 +21,7 @@ type MetricsService struct {
 	storage        repository.Storage
 	auditors       []Auditor
 	allMetricsTmpl *template.Template
+	logger         *zap.SugaredLogger
 }
 
 var (
@@ -31,9 +33,10 @@ type MetricsPage struct {
 	Metrics []*model.Metrics
 }
 
-func NewMetricsService(st repository.Storage) *MetricsService {
+func NewMetricsService(st repository.Storage, l *zap.Logger) *MetricsService {
 	return &MetricsService{
 		storage: st,
+		logger:  l.Sugar().With("component", "metrics-service"),
 	}
 }
 
@@ -117,6 +120,9 @@ func (ms *MetricsService) PingStorage(ctx context.Context) error {
 func (ms *MetricsService) notifyAuditors(ipAddr string, metrics ...*model.Metrics) {
 	ts := time.Now()
 	for _, auditor := range ms.auditors {
-		auditor.OnMetricsUpdate(ts, ipAddr, metrics...)
+		err := auditor.OnMetricsUpdate(ts, ipAddr, metrics...)
+		if err != nil {
+			ms.logger.Errorw("error performing metrics audit", "error", err)
+		}
 	}
 }

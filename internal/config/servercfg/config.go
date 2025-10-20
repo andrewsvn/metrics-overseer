@@ -59,8 +59,9 @@ type SecurityConfig struct {
 // AuditConfig contains settings related to audit of metrics updates - it can be forwarded to a file and/or
 // remote http server - if a corresponding setting is provided
 type AuditConfig struct {
-	AuditFilePath string `env:"AUDIT_FILE"`
-	AuditURL      string `env:"AUDIT_URL"`
+	AuditFilePath             string `env:"AUDIT_FILE"`
+	AuditFileWriteIntervalSec int    `env:"AUDIT_FILE_WRITE_INTERVAL" envDefault:"30"`
+	AuditURL                  string `env:"AUDIT_URL"`
 }
 
 // Config embeds all server configuration properties to be set by env.Parse or flag.Parse and be used in server code

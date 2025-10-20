@@ -1,26 +1,24 @@
 package audit
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/go-resty/resty/v2"
-	"go.uber.org/zap"
 )
 
 type HTTPWriter struct {
-	url    string
-	logger *zap.SugaredLogger
+	url string
 }
 
-func NewHTTPWriter(url string, l *zap.Logger) *HTTPWriter {
+func NewHTTPWriter(url string) *HTTPWriter {
 	return &HTTPWriter{
-		url:    url,
-		logger: l.Sugar().With(zap.String("component", "audit-httpwriter")),
+		url: url,
 	}
 }
 
-func (hw HTTPWriter) OnMetricsUpdate(ts time.Time, ipAddr string, metrics ...*model.Metrics) {
+func (hw *HTTPWriter) OnMetricsUpdate(ts time.Time, ipAddr string, metrics ...*model.Metrics) error {
 	req := resty.New().R()
 	req.URL = hw.url
 	req.SetHeader("Content-Type", "application/json")
@@ -28,6 +26,7 @@ func (hw HTTPWriter) OnMetricsUpdate(ts time.Time, ipAddr string, metrics ...*mo
 
 	_, err := req.Post(hw.url)
 	if err != nil {
-		hw.logger.Error("Failed to send metrics to audit service", "url", hw.url, "error", err)
+		return fmt.Errorf("failed to send metrics to audit service %s", hw.url)
 	}
+	return nil
 }

@@ -47,14 +47,16 @@ func Run() error {
 		}
 	}()
 
-	msrv := service.NewMetricsService(stor)
+	msrv := service.NewMetricsService(stor, logger)
+	var fw *audit.FileWriter
 	if cfg.AuditFilePath != "" {
 		sl.Infow("subscribing file auditor", "path", cfg.AuditFilePath)
-		msrv.SubscribeAuditor(audit.NewFileWriter(cfg.AuditFilePath, logger))
+		fw = audit.NewFileWriter(cfg.AuditFilePath, cfg.AuditFileWriteIntervalSec, logger)
+		msrv.SubscribeAuditor(fw)
 	}
 	if cfg.AuditURL != "" {
 		sl.Infow("subscribing http service auditor", "url", cfg.AuditURL)
-		msrv.SubscribeAuditor(audit.NewHTTPWriter(cfg.AuditURL, logger))
+		msrv.SubscribeAuditor(audit.NewHTTPWriter(cfg.AuditURL))
 	}
 
 	mhandlers := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
@@ -100,6 +102,10 @@ func Run() error {
 	err = stor.Close()
 	if err != nil {
 		logger.Error("failed to close storage", zap.Error(err))
+	}
+
+	if fw != nil {
+		fw.Close()
 	}
 
 	logger.Info("metric-overseer server shutdown complete")
