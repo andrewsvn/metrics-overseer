@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/andrewsvn/metrics-overseer/internal/server"
 	"log"
+
+	"github.com/andrewsvn/metrics-overseer/internal/server"
 )
 
 func main() {

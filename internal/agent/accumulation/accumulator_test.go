@@ -17,7 +17,7 @@ func TestCounterAccumulator(t *testing.T) {
 	require.NoError(t, err)
 
 	err = cntAcc.AccumulateGauge(100)
-	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
+	assert.ErrorAs(t, err, &ErrIncorrectMetricType)
 
 	_ = cntAcc.AccumulateCounter(2)
 	_ = cntAcc.AccumulateCounter(3)
@@ -59,7 +59,7 @@ func TestGaugeAccumulator(t *testing.T) {
 	require.NoError(t, err)
 
 	err = gaAcc.AccumulateCounter(1)
-	assert.ErrorAs(t, err, &model.ErrIncorrectAccess)
+	assert.ErrorAs(t, err, &ErrIncorrectMetricType)
 
 	_ = gaAcc.AccumulateGauge(3.0)
 	_ = gaAcc.AccumulateGauge(4.5)
