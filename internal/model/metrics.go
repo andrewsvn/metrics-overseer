@@ -14,6 +14,7 @@ const (
 // store Delta and Value as pointers to support uninitialized state
 // separated from default value without additional flags
 
+// generate:reset
 type Metrics struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
@@ -82,12 +83,6 @@ func (m *Metrics) AddCounter(delta int64) {
 	} else {
 		*m.Delta += delta
 	}
-	m.updateHash()
-}
-
-func (m *Metrics) Reset() {
-	m.Delta = nil
-	m.Value = nil
 	m.updateHash()
 }
 
