@@ -4,21 +4,18 @@ import (
 	"log"
 	"os"
 
+	"github.com/andrewsvn/metrics-overseer/internal/config/resetcfg"
 	"golang.org/x/tools/go/packages"
 )
 
-const (
-	rootPath string = `../..`
-)
-
 func main() {
-	_ = os.Chdir(rootPath)
+	_ = os.Chdir(resetcfg.GetConfig().RootDir)
 
-	cfg := packages.Config{
+	resetCfg := packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
 		Dir:  ".",
 	}
-	pkgs, err := packages.Load(&cfg, "./...")
+	pkgs, err := packages.Load(&resetCfg, "./...")
 	if err != nil {
 		log.Fatal(err)
 	}
