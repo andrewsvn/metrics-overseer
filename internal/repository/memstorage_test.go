@@ -46,7 +46,7 @@ func TestMemStorageCounters(t *testing.T) {
 
 	err = ms.ResetAll(ctx)
 	require.NoError(t, err)
-	cnt1, err = ms.GetByID(ctx, "cnt1")
+	_, err = ms.GetByID(ctx, "cnt1")
 	assert.Error(t, err)
 }
 
