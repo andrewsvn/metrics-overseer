@@ -6,5 +6,5 @@ import (
 )
 
 func main() {
-	singlechecker.Main(noragequit.Analyzer)
+	singlechecker.Main(noragequit.NewAnalyzer())
 }

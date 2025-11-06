@@ -3,7 +3,7 @@ package noragequit
 import (
 	"fmt"
 	"go/ast"
-	"strings"
+	"go/types"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -15,7 +15,7 @@ const (
 )
 
 type RageQuitVisitor struct {
-	excludedPackages map[string]bool
+	typesInfo *types.Info
 
 	nodeStack       []*ast.Node
 	isInMainPackage bool
@@ -24,28 +24,16 @@ type RageQuitVisitor struct {
 	issues []analysis.Diagnostic
 }
 
-func NewRageQuitVisitor(excludedPkgs string) *RageQuitVisitor {
-	v := &RageQuitVisitor{
-		excludedPackages: make(map[string]bool),
+func NewRageQuitVisitor(typesInfo *types.Info) *RageQuitVisitor {
+	return &RageQuitVisitor{
+		typesInfo: typesInfo,
 	}
-
-	eps := strings.Split(excludedPkgs, ",")
-	for _, ep := range eps {
-		v.excludedPackages[ep] = true
-	}
-
-	return v
 }
 
-func (v *RageQuitVisitor) ProcessNextFile(f *ast.File) bool {
-	if _, ok := v.excludedPackages[f.Name.Name]; ok {
-		return false
-	}
-
+func (v *RageQuitVisitor) ProcessNextFile(f *ast.File) {
 	v.nodeStack = nil
 	v.isInMainPackage = f.Name.Name == "main"
 	v.isInMainFunc = false
-	return true
 }
 
 func (v *RageQuitVisitor) InspectNode(node ast.Node) bool {
@@ -111,7 +99,7 @@ func (v *RageQuitVisitor) checkRageQuitSelector(sel *ast.SelectorExpr) {
 		return
 	}
 
-	sname := getSelectorName(sel)
+	sname := v.getResolvedSelectorName(sel)
 	if sname == selExit || sname == selFatal || sname == selFatalf {
 		v.issues = append(v.issues,
 			analysis.Diagnostic{
@@ -131,15 +119,19 @@ func (v *RageQuitVisitor) checkPanic(ident *ast.Ident) {
 	}
 }
 
-func getSelectorName(sel *ast.SelectorExpr) string {
+func (v *RageQuitVisitor) getResolvedSelectorName(sel *ast.SelectorExpr) string {
 	if ident, ok := sel.X.(*ast.Ident); ok {
-		return fmt.Sprintf("%s.%s", ident.Name, sel.Sel.Name)
+		qualName := ident.Name
+		if pkgName, ok := v.typesInfo.Uses[ident].(*types.PkgName); ok {
+			qualName = pkgName.Imported().Path()
+		}
+		return fmt.Sprintf("%s.%s", qualName, sel.Sel.Name)
 	}
 	if s, ok := sel.X.(*ast.SelectorExpr); ok {
-		return fmt.Sprintf("%s.%s", getSelectorName(s), sel.Sel.Name)
+		return fmt.Sprintf("%s.%s", v.getResolvedSelectorName(s), sel.Sel.Name)
 	}
 	if call, ok := sel.X.(*ast.CallExpr); ok {
-		return fmt.Sprintf("%s.%s", getSelectorName(call.Fun.(*ast.SelectorExpr)), sel.Sel.Name)
+		return fmt.Sprintf("%s.%s", v.getResolvedSelectorName(call.Fun.(*ast.SelectorExpr)), sel.Sel.Name)
 	}
 	return ""
 }

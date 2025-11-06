@@ -7,5 +7,5 @@ import (
 )
 
 func TestNoRageQuitAnalyzer(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), Analyzer, "./...")
+	analysistest.Run(t, analysistest.TestData(), NewAnalyzer(), "./...")
 }

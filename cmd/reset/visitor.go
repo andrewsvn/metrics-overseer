@@ -79,7 +79,7 @@ func (v *PackageVisitor) InspectDecl(node ast.Node) bool {
 		return false
 	}
 
-	if structData, ok := v.getResettableStructFromDecl(genDecl); ok {
+	if structData := v.getResettableStructFromDecl(genDecl); structData != nil {
 		log.Printf("Package %s: found resettable struct type %s", v.PkgID, structData.Name)
 		v.Structs = append(v.Structs, structData)
 	}
@@ -117,13 +117,13 @@ func (v *PackageVisitor) GenerateResetMethodsFile() error {
 	return nil
 }
 
-func (v *PackageVisitor) getResettableStructFromDecl(decl *ast.GenDecl) (*ResettableStructData, bool) {
+func (v *PackageVisitor) getResettableStructFromDecl(decl *ast.GenDecl) *ResettableStructData {
 	if decl.Tok != token.TYPE {
-		return nil, false
+		return nil
 	}
 
 	if !declHasResetComment(decl) {
-		return nil, false
+		return nil
 	}
 
 	for _, spec := range decl.Specs {
@@ -145,10 +145,10 @@ func (v *PackageVisitor) getResettableStructFromDecl(decl *ast.GenDecl) (*Resett
 			Name:            typeSpec.Name.Name,
 			FieldResetExprs: resetExprs,
 		}
-		return structData, true
+		return structData
 	}
 
-	return nil, false
+	return nil
 }
 
 func declHasResetComment(decl *ast.GenDecl) bool {
