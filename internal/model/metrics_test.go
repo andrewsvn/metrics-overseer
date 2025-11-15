@@ -29,10 +29,6 @@ func TestCounterMetrics(t *testing.T) {
 	assert.NotEqual(t, initialHash, m.Hash)
 	valHash := m.Hash
 
-	m.Reset()
-	assert.Nil(t, m.Delta)
-	assert.Equal(t, initialHash, m.Hash)
-
 	m = NewCounterMetricsWithDelta(id, 0)
 	assert.Equal(t, id, m.ID)
 	assert.Equal(t, Counter, m.MType)
@@ -60,10 +56,6 @@ func TestGaugeMetrics(t *testing.T) {
 	assert.Equal(t, 0.0, *m.Value)
 	assert.NotEqual(t, initialHash, m.Hash)
 	valHash := m.Hash
-
-	m.Reset()
-	assert.Nil(t, m.Value)
-	assert.Equal(t, initialHash, m.Hash)
 
 	m = NewGaugeMetricsWithValue(id, 0.0)
 	require.NotNil(t, m.Value)

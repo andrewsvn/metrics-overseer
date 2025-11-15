@@ -46,9 +46,8 @@ func TestMemStorageCounters(t *testing.T) {
 
 	err = ms.ResetAll(ctx)
 	require.NoError(t, err)
-	cnt1, err = ms.GetByID(ctx, "cnt1")
-	assert.NoError(t, err)
-	assert.Nil(t, cnt1.Delta)
+	_, err = ms.GetByID(ctx, "cnt1")
+	assert.Error(t, err)
 }
 
 func TestMemStorageGauges(t *testing.T) {

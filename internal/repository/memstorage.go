@@ -125,9 +125,7 @@ func (ms *MemStorage) SetAll(_ context.Context, metrics []*model.Metrics) error 
 
 func (ms *MemStorage) ResetAll(_ context.Context) error {
 	ms.mutex.Lock()
-	for _, m := range ms.data {
-		m.Reset()
-	}
+	clear(ms.data)
 	ms.mutex.Unlock()
 	return nil
 }

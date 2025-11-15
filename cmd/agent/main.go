@@ -1,14 +1,24 @@
 package main
 
 import (
-	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"log"
+
+	"github.com/andrewsvn/metrics-overseer/internal/buildinfo"
+	"github.com/andrewsvn/metrics-overseer/internal/logging"
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent"
 	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	buildinfo.Print(buildVersion, buildDate, buildCommit)
+
 	cfg, err := agentcfg.Read()
 	if err != nil {
 		log.Fatalf("Can't read agent configuration: %v", err)
