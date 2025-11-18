@@ -40,6 +40,7 @@ type Config struct {
 	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
 	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD"`
 	SecretKey         string `env:"KEY"`
+	PublicKeyPath     string `env:"CRYPTO_KEY"`
 	LogLevel          string `env:"AGENT_LOG_LEVEL" default:"info"`
 }
 
@@ -86,4 +87,6 @@ func (cfg *Config) bindFlags() {
 
 	flag.StringVar(&cfg.SecretKey, "k", "",
 		"secret key for request signing")
+	flag.StringVar(&cfg.PublicKeyPath, "crypto-key", "",
+		"path to PEM file with RSA public key for encrypting requests (no encryption if empty)")
 }

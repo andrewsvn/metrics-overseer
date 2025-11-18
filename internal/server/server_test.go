@@ -502,7 +502,7 @@ func setupServerWithMemStorage() *httptest.Server {
 	gm.SetGauge(3.14)
 	_ = msrv.AccumulateMetric(ctx, gm, "")
 
-	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
+	mhandlers, _ := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }
@@ -512,7 +512,7 @@ func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
 
 	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
 	msrv := service.NewMetricsService(mstor, logger)
-	mhandlers := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
+	mhandlers, _ := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }

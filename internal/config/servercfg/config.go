@@ -53,7 +53,8 @@ type PostgresRetryConfig struct {
 // SecurityConfig contains settings related to HTTP authentication for clients of metrics-overseer server
 // including metrics-overseer agent
 type SecurityConfig struct {
-	SecretKey string `env:"KEY"`
+	SecretKey      string `env:"KEY"`
+	PrivateKeyPath string `env:"CRYPTO_KEY"`
 }
 
 // AuditConfig contains settings related to audit of metrics updates - it can be forwarded to a file and/or
@@ -109,6 +110,8 @@ func (cfg *Config) bindFlags() {
 
 	flag.StringVar(&cfg.SecretKey, "k", "",
 		"secret key for verifying requests and signing responses")
+	flag.StringVar(&cfg.PrivateKeyPath, "crypto-key", "",
+		"path to PEM file with RSA private key for decrypting requests (no decryption if empty)")
 
 	flag.StringVar(&cfg.AuditFilePath, "audit-file", "",
 		"audit file path (should be specified to enable file audit)")
