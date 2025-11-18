@@ -18,7 +18,7 @@ func TestAgentPolling(t *testing.T) {
 	l, err := logging.NewZapLogger("info")
 	require.NoError(t, err)
 	stor := accumulation.NewAccumulatorStorage()
-	p := NewPoller(agentcfg.Default(), stor, l)
+	p := NewPoller(agentcfg.NewDefaultConfig(), stor, l)
 
 	p.execMemstatsPoll()
 	assert.Greater(t, p.stor.Length(), 2)
@@ -39,7 +39,7 @@ func TestAgentReporting(t *testing.T) {
 	l, err := logging.NewZapLogger("info")
 	require.NoError(t, err)
 	stor := accumulation.NewAccumulatorStorage()
-	r, err := NewReporter(agentcfg.Default(), stor, l)
+	r, err := NewReporter(agentcfg.NewDefaultConfig(), stor, l)
 	require.NoError(t, err)
 
 	msender := new(mocks.MockMetricSender)
