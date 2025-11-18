@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("error initializing logger: %v", err)
 	}
 
-	sender, err := sending.NewRestSender(cfg.URL, &retrying.NoRetryPolicy{}, "", l)
+	sender, err := sending.NewRestSender(cfg.URL, &retrying.NoRetryPolicy{}, "", "", l)
 	if err != nil {
 		log.Fatalf("error initializing sender: %v", err)
 	}
