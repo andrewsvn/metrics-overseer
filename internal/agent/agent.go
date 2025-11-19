@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent/accumulation"
 	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
@@ -50,7 +52,7 @@ func (a *Agent) Run() {
 
 	ctx, done := context.WithCancel(context.Background())
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	wg := &sync.WaitGroup{}
 	a.pollr.Start(ctx, wg)
