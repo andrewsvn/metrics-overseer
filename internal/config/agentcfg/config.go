@@ -25,15 +25,15 @@ const (
 
 // ReportRetryConfig contains retry policy configuration for metrics reporting to metrics-overseer server
 type ReportRetryConfig struct {
-	MaxRetryCount          int `env:"REPORT_RETRY_COUNT"`
-	InitialRetryDelaySec   int `env:"REPORT_INITIAL_RETRY_DELAY"`
-	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT"`
+	MaxRetryCount          int `env:"REPORT_MAX_RETRY_COUNT" json:"report_max_retry_count"`
+	InitialRetryDelaySec   int `env:"REPORT_INITIAL_RETRY_DELAY" json:"report_initial_retry_delay_sec"`
+	RetryDelayIncrementSec int `env:"REPORT_RETRY_DELAY_INCREMENT" json:"report_retry_delay_increment_sec"`
 }
 
 // ReportingConfig contains settings for simultaneous sending of metrics to metrics-overseer server
 // used by agent/reporting package methods
 type ReportingConfig struct {
-	MaxNumberOfRequests int `env:"RATE_LIMIT"`
+	MaxNumberOfRequests int `env:"RATE_LIMIT" json:"rate_limit"`
 }
 
 // Config embeds all agent configuration properties to be set by env.Parse or flag.Parse and be used in agent code
@@ -41,13 +41,13 @@ type Config struct {
 	ReportingConfig
 	ReportRetryConfig
 
-	ServerAddr        string `env:"ADDRESS"`
-	PollIntervalSec   int    `env:"POLL_INTERVAL"`
-	ReportIntervalSec int    `env:"REPORT_INTERVAL"`
-	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD"`
-	SecretKey         string `env:"KEY"`
-	PublicKeyPath     string `env:"CRYPTO_KEY"`
-	LogLevel          string `env:"AGENT_LOG_LEVEL"`
+	ServerAddr        string `env:"ADDRESS" json:"address"`
+	PollIntervalSec   int    `env:"POLL_INTERVAL" json:"poll_interval_sec"`
+	ReportIntervalSec int    `env:"REPORT_INTERVAL" json:"report_interval_sec"`
+	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD" json:"grace_period_sec"`
+	SecretKey         string `env:"KEY" json:"key"`
+	PublicKeyPath     string `env:"CRYPTO_KEY" json:"crypto_key"`
+	LogLevel          string `env:"AGENT_LOG_LEVEL" json:"agent_log_level"`
 
 	ConfigFile string `env:"CONFIG"`
 }
@@ -81,7 +81,7 @@ func (cfg *Config) bindFlags() {
 	flag.IntVar(&cfg.PollIntervalSec, "p", 0,
 		fmt.Sprintf("accumulation polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVar(&cfg.ReportIntervalSec, "r", 0,
-		fmt.Sprintf("accumulation reporting interval, seconds", defaultReportIntervalSec))
+		fmt.Sprintf("accumulation reporting interval, seconds (default: %d)", defaultReportIntervalSec))
 	flag.IntVar(&cfg.GracePeriodSec, "gs", 0,
 		fmt.Sprintf("accumulation agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
 

@@ -82,7 +82,7 @@ func TestJSONAndDefaultConfigs(t *testing.T) {
 }
 
 func prepareConfigFile(t *testing.T) string {
-	tmpPath := filepath.Join(t.TempDir(), "config.json")
+	tmpPath := filepath.Join(t.TempDir(), "serverconfig.json")
 	if err := os.WriteFile(tmpPath, []byte(config), 0644); err != nil {
 		t.Fatalf("failed to write temp config file: %v", err)
 	}
