@@ -2,21 +2,24 @@ package sending
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/encrypt"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
 )
 
 type RestSender struct {
 	addr string
 
 	secretKey []byte
+	encrypter encrypt.Encrypter
 
 	// we use a custom http client here for further customization
 	// and to enable connection reuse for sequential server calls
@@ -30,6 +33,7 @@ func NewRestSender(
 	addr string,
 	retryPolicy retrying.Policy,
 	secretKey string,
+	rsaKeyPath string,
 	logger *zap.Logger,
 ) (*RestSender, error) {
 	restLogger := logger.Sugar().With(zap.String("component", "rest-sender"))
@@ -46,6 +50,16 @@ func NewRestSender(
 		WithLogger(restLogger, "sending metrics").
 		Build()
 
+	var publicKey *rsa.PublicKey
+	if rsaKeyPath != "" {
+		var err error
+		publicKey, err = encrypt.ReadRSAPublicKeyFromFile(rsaKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("can't read RSA public key for encryption: %w", err)
+		}
+		restLogger.Infow("using RSA public key for encryption")
+	}
+
 	rs := &RestSender{
 		addr:      enrichedAddr,
 		cl:        &http.Client{},
@@ -53,6 +67,7 @@ func NewRestSender(
 		logger:    restLogger,
 		retrier:   retrier,
 		secretKey: []byte(secretKey),
+		encrypter: encrypt.NewRSAEngineBuilder().PublicKey(publicKey).Build(),
 	}
 	return rs, nil
 }
@@ -73,6 +88,14 @@ func (rs *RestSender) SendMetric(metric *model.Metrics) error {
 	body, err := json.Marshal(metric)
 	if err != nil {
 		return fmt.Errorf("can't construct metric update request: %w", err)
+	}
+
+	// encrypt body if needed before compression
+	if rs.encrypter.EncryptingEnabled() {
+		body, err = rs.encrypter.Encrypt(body)
+		if err != nil {
+			return fmt.Errorf("can't encrypt metric update request: %w", err)
+		}
 	}
 
 	if rs.cwe != nil {
@@ -100,6 +123,14 @@ func (rs *RestSender) SendMetricArray(metrics []*model.Metrics) error {
 	body, err := json.Marshal(metrics)
 	if err != nil {
 		return fmt.Errorf("can't construct metrics array update request: %w", err)
+	}
+
+	// encrypt body if needed before compression
+	if rs.encrypter.EncryptingEnabled() {
+		body, err = rs.encrypter.Encrypt(body)
+		if err != nil {
+			return fmt.Errorf("can't encrypt metric update request: %w", err)
+		}
 	}
 
 	if rs.cwe != nil {
