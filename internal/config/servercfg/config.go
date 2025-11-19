@@ -88,7 +88,7 @@ type Config struct {
 
 	// ConfigFile specifies path to application config in JSON format, if specified
 	// it will be parsed to extract mapping that can be used if neither flag nor environment variable is not specified
-	ConfigFile string `env:"CONFIG"`
+	ConfigFile string `env:"SERVER_CONFIG"`
 }
 
 // Read is used to initialize server Config from environment variables and/or flags. Environment variables have higher

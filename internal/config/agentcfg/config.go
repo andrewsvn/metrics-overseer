@@ -49,7 +49,7 @@ type Config struct {
 	PublicKeyPath     string `env:"CRYPTO_KEY" json:"crypto_key"`
 	LogLevel          string `env:"AGENT_LOG_LEVEL" json:"agent_log_level"`
 
-	ConfigFile string `env:"CONFIG"`
+	ConfigFile string `env:"AGENT_CONFIG"`
 }
 
 // Read is used to initialize agent Config from environment variables and/or flags. Environment variables have higher
