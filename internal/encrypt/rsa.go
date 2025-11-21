@@ -41,7 +41,7 @@ type rsaAESEncryptedBlock struct {
 
 func (engine *RSAAESEngine) Encrypt(data []byte) ([]byte, error) {
 	if engine.publicKey == nil {
-		return nil, ErrEncryptingDisabled
+		return nil, errEncryptingDisabled
 	}
 
 	aesEncData, err := aesEncrypt(data)
@@ -74,7 +74,7 @@ func (engine *RSAAESEngine) EncryptingEnabled() bool {
 
 func (engine *RSAAESEngine) Decrypt(encrypted []byte) ([]byte, error) {
 	if engine.privateKey == nil {
-		return nil, ErrDecryptingDisabled
+		return nil, errDecryptingDisabled
 	}
 
 	rsaAESEncData := &rsaAESEncryptedBlock{}

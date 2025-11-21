@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 
+	"dario.cat/mergo"
 	"github.com/caarlos0/env/v6"
 	flag "github.com/spf13/pflag"
 )
@@ -107,33 +108,39 @@ func Read() (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfg.FillOutEmptyValues(fileCfg)
+		err = mergo.Merge(cfg, fileCfg)
+		if err != nil {
+			return nil, fmt.Errorf("unable to merge server configs: %w", err)
+		}
 	}
-	cfg.FillOutEmptyValues(NewDefaultConfig())
+	err = mergo.Merge(cfg, NewDefaultConfig())
+	if err != nil {
+		return nil, fmt.Errorf("unable to merge server configs: %w", err)
+	}
 
 	return cfg, nil
 }
 
 func (cfg *Config) bindFlags() {
-	flag.StringVar(&cfg.Addr, "a", "",
+	flag.StringVarP(&cfg.Addr, "addr", "a", "",
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
-	flag.IntVar(&cfg.GracePeriodSec, "gs", 0,
+	flag.IntVar(&cfg.GracePeriodSec, "grace-period", 0,
 		fmt.Sprintf("server grace period in seconds (default: %d)", defaultGracePeriodSec))
 	flag.StringVar(&cfg.PprofAddr, "pprof", "",
 		"pprof endpoints address in form of host:port, must be different from server address "+
 			"(pprof disabled if not specified)")
 
-	flag.StringVar(&cfg.StorageFilePath, "f", "",
+	flag.StringVarP(&cfg.StorageFilePath, "store-file", "f", "",
 		"metrics storage file path (should be specified to enable file storage)")
-	flag.IntVar(&cfg.StoreIntervalSec, "i", 0,
+	flag.IntVarP(&cfg.StoreIntervalSec, "store-interval", "i", 0,
 		"metrics storing interval in seconds (0 for synchronous store)")
-	flag.BoolVar(&cfg.RestoreOnStartup, "r", false,
+	flag.BoolVarP(&cfg.RestoreOnStartup, "restore", "r", false,
 		"flag for restoring metrics on startup")
 
-	flag.StringVar(&cfg.DBConnString, "d", "",
+	flag.StringVarP(&cfg.DBConnString, "database-dsn", "d", "",
 		"postgres database connection string (should be specified to enable postgres storage)")
 
-	flag.StringVar(&cfg.SecretKey, "k", "",
+	flag.StringVarP(&cfg.SecretKey, "secret-key", "k", "",
 		"secret key for verifying requests and signing responses")
 	flag.StringVar(&cfg.PrivateKeyPath, "crypto-key", "",
 		"path to PEM file with RSA private key for decrypting requests (no decryption if empty)")
@@ -144,64 +151,6 @@ func (cfg *Config) bindFlags() {
 		"audit url (should be specified to enable http service audit)")
 
 	flag.StringVarP(&cfg.ConfigFile, "config", "c", "", "path to JSON config file with default configuration")
-}
-
-// FillOutEmptyValues for each missing cfg value tries tp get corresponding value from nextCfg and fill it
-// can be used to fill out missing values using config from JSON file and then some default config
-func (cfg *Config) FillOutEmptyValues(nextCfg *Config) {
-	if cfg.StorageFilePath == "" {
-		cfg.StorageFilePath = nextCfg.StorageFilePath
-	}
-	if cfg.StoreIntervalSec == 0 {
-		cfg.StoreIntervalSec = nextCfg.StoreIntervalSec
-	}
-	if !cfg.RestoreOnStartup {
-		cfg.RestoreOnStartup = nextCfg.RestoreOnStartup
-	}
-
-	if cfg.DBConnString == "" {
-		cfg.DBConnString = nextCfg.DBConnString
-	}
-
-	if cfg.MaxRetryCount == 0 {
-		cfg.MaxRetryCount = nextCfg.MaxRetryCount
-	}
-	if cfg.InitialRetryDelaySec == 0 {
-		cfg.InitialRetryDelaySec = nextCfg.InitialRetryDelaySec
-	}
-	if cfg.RetryDelayIncrementSec == 0 {
-		cfg.RetryDelayIncrementSec = nextCfg.RetryDelayIncrementSec
-	}
-
-	if cfg.SecretKey == "" {
-		cfg.SecretKey = nextCfg.SecretKey
-	}
-	if cfg.PrivateKeyPath == "" {
-		cfg.PrivateKeyPath = nextCfg.PrivateKeyPath
-	}
-
-	if cfg.AuditFilePath == "" {
-		cfg.AuditFilePath = nextCfg.AuditFilePath
-	}
-	if cfg.AuditFileWriteIntervalSec == 0 {
-		cfg.AuditFileWriteIntervalSec = nextCfg.AuditFileWriteIntervalSec
-	}
-	if cfg.AuditURL == "" {
-		cfg.AuditURL = nextCfg.AuditURL
-	}
-
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = nextCfg.LogLevel
-	}
-	if cfg.Addr == "" {
-		cfg.Addr = nextCfg.Addr
-	}
-	if cfg.GracePeriodSec == 0 {
-		cfg.GracePeriodSec = nextCfg.GracePeriodSec
-	}
-	if cfg.PprofAddr == "" {
-		cfg.PprofAddr = nextCfg.PprofAddr
-	}
 }
 
 func NewConfigFromJSONFile(path string) (*Config, error) {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"dario.cat/mergo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,30 +28,27 @@ var config string = `{
 
 func TestJSONAndDefaultConfigs(t *testing.T) {
 	tmpPath := prepareConfigFile(t)
-
-	initialConfig := &Config{}
 	jsonConfig, err := NewConfigFromJSONFile(tmpPath)
 	require.NoError(t, err)
 
-	initialConfig.FillOutEmptyValues(jsonConfig)
-	assert.Equal(t, "", initialConfig.Addr)
-	assert.Equal(t, "", initialConfig.LogLevel)
-	assert.Equal(t, ":6060", initialConfig.PprofAddr)
-	assert.Equal(t, 15, initialConfig.GracePeriodSec)
-	assert.Equal(t, "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable", initialConfig.DBConnString)
-	assert.Equal(t, "abbaabbaupdownselectstart", initialConfig.SecretKey)
-	assert.Equal(t, "path/to/crypto_key", initialConfig.PrivateKeyPath)
-	assert.Equal(t, 100, initialConfig.StoreIntervalSec)
-	assert.Equal(t, "storage.path", initialConfig.StorageFilePath)
-	assert.Equal(t, true, initialConfig.RestoreOnStartup)
-	assert.Equal(t, "audit.file", initialConfig.AuditFilePath)
-	assert.Equal(t, 0, initialConfig.AuditFileWriteIntervalSec)
-	assert.Equal(t, "audit.url", initialConfig.AuditURL)
-	assert.Equal(t, 10, initialConfig.MaxRetryCount)
-	assert.Equal(t, 15, initialConfig.InitialRetryDelaySec)
-	assert.Equal(t, 5, initialConfig.RetryDelayIncrementSec)
+	assert.Equal(t, "", jsonConfig.Addr)
+	assert.Equal(t, "", jsonConfig.LogLevel)
+	assert.Equal(t, ":6060", jsonConfig.PprofAddr)
+	assert.Equal(t, 15, jsonConfig.GracePeriodSec)
+	assert.Equal(t, "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable", jsonConfig.DBConnString)
+	assert.Equal(t, "abbaabbaupdownselectstart", jsonConfig.SecretKey)
+	assert.Equal(t, "path/to/crypto_key", jsonConfig.PrivateKeyPath)
+	assert.Equal(t, 100, jsonConfig.StoreIntervalSec)
+	assert.Equal(t, "storage.path", jsonConfig.StorageFilePath)
+	assert.Equal(t, true, jsonConfig.RestoreOnStartup)
+	assert.Equal(t, "audit.file", jsonConfig.AuditFilePath)
+	assert.Equal(t, 0, jsonConfig.AuditFileWriteIntervalSec)
+	assert.Equal(t, "audit.url", jsonConfig.AuditURL)
+	assert.Equal(t, 10, jsonConfig.MaxRetryCount)
+	assert.Equal(t, 15, jsonConfig.InitialRetryDelaySec)
+	assert.Equal(t, 5, jsonConfig.RetryDelayIncrementSec)
 
-	initialConfig = &Config{
+	initialConfig := &Config{
 		Addr: ":10000",
 		SecurityConfig: SecurityConfig{
 			SecretKey: "secretkey",
@@ -62,7 +60,9 @@ func TestJSONAndDefaultConfigs(t *testing.T) {
 			AuditFileWriteIntervalSec: 20,
 		},
 	}
-	initialConfig.FillOutEmptyValues(jsonConfig)
+
+	err = mergo.Merge(initialConfig, jsonConfig)
+	require.NoError(t, err)
 	assert.Equal(t, ":10000", initialConfig.Addr)
 	assert.Equal(t, "", initialConfig.LogLevel)
 	assert.Equal(t, ":6060", initialConfig.PprofAddr)

@@ -33,9 +33,9 @@ func TestRSAEngineUnlabeled(t *testing.T) {
 	assert.False(t, decrypter.EncryptingEnabled())
 	assert.True(t, decrypter.DecryptingEnabled())
 	encrypted, err = decrypter.Encrypt(data)
-	assert.ErrorAs(t, err, &ErrEncryptingDisabled)
+	assert.ErrorAs(t, err, &errEncryptingDisabled)
 	_, err = encrypter.Decrypt(encrypted)
-	assert.ErrorAs(t, err, &ErrDecryptingDisabled)
+	assert.ErrorAs(t, err, &errDecryptingDisabled)
 
 	// big data chunk
 	data = make([]byte, 4000)

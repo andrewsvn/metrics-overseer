@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"dario.cat/mergo"
 	"github.com/caarlos0/env/v6"
 	flag "github.com/spf13/pflag"
 )
@@ -68,73 +69,40 @@ func Read() (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfg.FillOutEmptyValues(fileCfg)
-	}
-	cfg.FillOutEmptyValues(NewDefaultConfig())
 
+		err = mergo.Merge(cfg, fileCfg)
+		if err != nil {
+			return nil, fmt.Errorf("unable to merge agent configs: %w", err)
+		}
+	}
+
+	err = mergo.Merge(cfg, NewDefaultConfig())
+	if err != nil {
+		return nil, fmt.Errorf("unable to merge agent configs: %w", err)
+	}
 	return cfg, nil
 }
 
 func (cfg *Config) bindFlags() {
-	flag.StringVar(&cfg.ServerAddr, "a", "",
+	flag.StringVarP(&cfg.ServerAddr, "addr", "a", "",
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
-	flag.IntVar(&cfg.PollIntervalSec, "p", 0,
+	flag.IntVarP(&cfg.PollIntervalSec, "poll-interval", "p", 0,
 		fmt.Sprintf("accumulation polling interval, seconds (default: %d)", defaultPollIntervalSec))
-	flag.IntVar(&cfg.ReportIntervalSec, "r", 0,
+	flag.IntVarP(&cfg.ReportIntervalSec, "report-interval", "r", 0,
 		fmt.Sprintf("accumulation reporting interval, seconds (default: %d)", defaultReportIntervalSec))
-	flag.IntVar(&cfg.GracePeriodSec, "gs", 0,
+	flag.IntVar(&cfg.GracePeriodSec, "grace-period", 0,
 		fmt.Sprintf("accumulation agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
 
-	flag.IntVar(&cfg.MaxNumberOfRequests, "l", 0,
+	flag.IntVarP(&cfg.MaxNumberOfRequests, "simultaneous", "l", 0,
 		fmt.Sprintf("maximum number of simultaneous reporting requests (default: 0). "+
 			"If 0, single-thread batching is used"))
 
-	flag.StringVar(&cfg.SecretKey, "k", "",
+	flag.StringVarP(&cfg.SecretKey, "secret-key", "k", "",
 		"secret key for request signing")
 	flag.StringVar(&cfg.PublicKeyPath, "crypto-key", "",
 		"path to PEM file with RSA public key for encrypting requests (no encryption if empty)")
 
 	flag.StringVarP(&cfg.ConfigFile, "config", "c", "", "path to JSON config file with default configuration")
-}
-
-// FillOutEmptyValues for each missing cfg value tries tp get corresponding value from nextCfg and fill it
-// can be used to fill out missing values using config from JSON file and then some default config
-func (cfg *Config) FillOutEmptyValues(nextCfg *Config) {
-	if cfg.MaxRetryCount == 0 {
-		cfg.MaxRetryCount = nextCfg.MaxRetryCount
-	}
-	if cfg.InitialRetryDelaySec == 0 {
-		cfg.InitialRetryDelaySec = nextCfg.InitialRetryDelaySec
-	}
-	if cfg.RetryDelayIncrementSec == 0 {
-		cfg.RetryDelayIncrementSec = nextCfg.RetryDelayIncrementSec
-	}
-
-	if cfg.MaxNumberOfRequests == 0 {
-		cfg.MaxNumberOfRequests = nextCfg.MaxNumberOfRequests
-	}
-
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = nextCfg.LogLevel
-	}
-	if cfg.ServerAddr == "" {
-		cfg.ServerAddr = nextCfg.ServerAddr
-	}
-	if cfg.GracePeriodSec == 0 {
-		cfg.GracePeriodSec = nextCfg.GracePeriodSec
-	}
-	if cfg.PollIntervalSec == 0 {
-		cfg.PollIntervalSec = nextCfg.PollIntervalSec
-	}
-	if cfg.ReportIntervalSec == 0 {
-		cfg.ReportIntervalSec = nextCfg.ReportIntervalSec
-	}
-	if cfg.SecretKey == "" {
-		cfg.SecretKey = nextCfg.SecretKey
-	}
-	if cfg.PublicKeyPath == "" {
-		cfg.PublicKeyPath = nextCfg.PublicKeyPath
-	}
 }
 
 func NewConfigFromJSONFile(path string) (*Config, error) {

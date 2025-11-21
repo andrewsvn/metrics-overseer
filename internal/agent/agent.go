@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -50,16 +49,15 @@ func NewAgent(cfg *agentcfg.Config, l *zap.Logger) (*Agent, error) {
 func (a *Agent) Run() {
 	a.logger.Info("starting accumulation-overseer agent")
 
-	ctx, done := context.WithCancel(context.Background())
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	//ctx, done := context.WithCancel(context.Background())
+	ctx, done := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer done()
 
 	wg := &sync.WaitGroup{}
 	a.pollr.Start(ctx, wg)
 	a.repr.Start(ctx, wg)
 
-	<-stop
-	done()
+	<-ctx.Done()
 
 	a.logger.Info("shutting down accumulation-overseer agent...")
 	_, shutdownCancel := context.WithTimeout(context.Background(), a.gracePeriod)

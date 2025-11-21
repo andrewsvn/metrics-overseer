@@ -70,5 +70,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("keys successfully generated in %s\n", baseDir)
+	log.Printf("keys successfully generated in %s\n", baseDir)
 }

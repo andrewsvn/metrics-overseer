@@ -13,6 +13,6 @@ type Decrypter interface {
 }
 
 var (
-	ErrEncryptingDisabled = errors.New("encrypting disabled")
-	ErrDecryptingDisabled = errors.New("decrypting disabled")
+	errEncryptingDisabled = errors.New("encrypting disabled")
+	errDecryptingDisabled = errors.New("decrypting disabled")
 )

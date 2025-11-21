@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 )
 
 const (
@@ -31,22 +32,22 @@ func aesEncrypt(data []byte) (*aesEncrypted, error) {
 
 	enc.Key, err = generateRandomBytes(aesKeySize)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error generating AES key bytes: %w", err)
 	}
 
 	aesBlock, err := aes.NewCipher(enc.Key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating AES cipher %w", err)
 	}
 
 	aesGCM, err := cipher.NewGCM(aesBlock)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating AES GCM: %w", err)
 	}
 
 	enc.Nonce, err = generateRandomBytes(aesGCM.NonceSize())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error generating AES nonce bytes: %w", err)
 	}
 
 	enc.Ciphertext = aesGCM.Seal(nil, enc.Nonce, data, nil)
@@ -56,17 +57,17 @@ func aesEncrypt(data []byte) (*aesEncrypted, error) {
 func aesDecrypt(enc *aesEncrypted) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(enc.Key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating AES cipher: %w", err)
 	}
 
 	aesGCM, err := cipher.NewGCM(aesBlock)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating AES GCM: %w", err)
 	}
 
 	data, err := aesGCM.Open(nil, enc.Nonce, enc.Ciphertext, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error decrypting AES ciphertext: %w", err)
 	}
 	return data, nil
 }

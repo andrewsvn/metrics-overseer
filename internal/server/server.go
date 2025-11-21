@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -72,8 +71,8 @@ func Run() error {
 		Handler: r,
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer cancel()
 
 	go func() {
 		logger.Sugar().Infow("starting metric-overseer server",
@@ -95,9 +94,10 @@ func Run() error {
 		}()
 	}
 
-	<-stop
+	<-ctx.Done()
+
 	logger.Info("shutting down metric-overseer server...")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.GracePeriodSec)*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(cfg.GracePeriodSec)*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)
