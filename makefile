@@ -30,3 +30,13 @@ BUILD_ALL:
 	make BUILD_RESET
 	make BUILD_TEST_TOOLS
 
+POSTGRES_UP:
+	docker run --name metrics-postgres \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_PASSWORD=p0stgres \
+      -e POSTGRES_DB=metrics-overseer \
+      -p 5432:5432 \
+      -d postgres:17
+
+POSTGRES_DOWN:
+	docker stop metrics-postgres

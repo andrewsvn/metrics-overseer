@@ -1,26 +1,40 @@
 package middleware
 
 import (
-	"github.com/andrewsvn/metrics-overseer/internal/compress"
-	"go.uber.org/zap"
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
+
+	"github.com/andrewsvn/metrics-overseer/internal/compress"
+	"github.com/andrewsvn/metrics-overseer/internal/handler/errorhandling"
+	"go.uber.org/zap"
 )
 
 type Compressing struct {
-	compr  *compress.Compressor
-	logger *zap.SugaredLogger
+	compr   *compress.Compressor
+	decompr *compress.Decompressor
+	logger  *zap.SugaredLogger
 }
 
 func NewCompressing(l *zap.Logger) *Compressing {
 	cmLogger := l.Sugar().With(zap.String("component", "compress-middleware"))
 	return &Compressing{
-		compr:  compress.NewCompressor(l, compress.NewGzipWriteEngine()),
-		logger: cmLogger,
+		compr:   compress.NewCompressor(l, compress.NewGzipWriteEngine()),
+		decompr: compress.NewDecompressor(l, compress.NewGzipReadEngine()),
+		logger:  cmLogger,
 	}
 }
 
 func (c *Compressing) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := c.decompr.ReadRequestBody(r)
+		if err != nil {
+			errorhandling.NewValidationHandlerError(fmt.Sprintf("error decompressing body: %v", err)).Render(w)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
+
 		crw, err := c.compr.CreateCompressWriter(w, r)
 		if err != nil {
 			c.logger.Error("error creating compress writer", zap.Error(err))

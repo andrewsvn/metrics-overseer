@@ -3,15 +3,16 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/andrewsvn/metrics-overseer/internal/compress"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/encrypt"
 	"github.com/andrewsvn/metrics-overseer/internal/handler/errorhandling"
@@ -45,8 +46,8 @@ import (
 
 type MetricsHandlers struct {
 	msrv        *service.MetricsService
-	decomp      *compress.Decompressor
 	securityCfg *servercfg.SecurityConfig
+	decrypter   encrypt.Decrypter
 
 	baseLogger *zap.Logger
 	logger     *zap.SugaredLogger
@@ -61,45 +62,71 @@ func NewMetricsHandlers(
 	ms *service.MetricsService,
 	securityCfg *servercfg.SecurityConfig,
 	logger *zap.Logger,
-) *MetricsHandlers {
+) (*MetricsHandlers, error) {
 	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
+
+	var privKey *rsa.PrivateKey
+	if securityCfg.PrivateKeyPath != "" {
+		var err error
+		privKey, err = encrypt.ReadRSAPrivateKeyFromFile(securityCfg.PrivateKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading private key for decryption: %w", err)
+		}
+		mhLogger.Infow("using RSA private key for request decryption")
+	}
+
 	return &MetricsHandlers{
 		msrv:        ms,
-		decomp:      compress.NewDecompressor(logger, compress.NewGzipReadEngine()),
+		decrypter:   encrypt.NewRSAEngineBuilder().PrivateKey(privKey).Build(),
 		baseLogger:  logger,
 		logger:      mhLogger,
 		securityCfg: securityCfg,
-	}
+	}, nil
 }
 
 func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	r := chi.NewRouter()
 
-	r.Use(
+	// For secured requests middlewares applied in a given order - so a client which applies multiple transformations
+	// and checks to their request must apply them in the corresponding order (only for the body part):
+	// - encrypt request body with an RSA public key if it is specified
+	// - compress the body if needed
+	// - sign the body if secret key is available
+	secureR := r.With(
 		middleware.NewHTTPLogging(mh.baseLogger).Middleware,
 		middleware.NewAuthorization(mh.baseLogger, mh.securityCfg.SecretKey).Middleware,
 		middleware.NewCompressing(mh.baseLogger).Middleware,
+		middleware.NewDecryption(mh.baseLogger, mh.decrypter).Middleware,
 	)
 
-	r.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
-	r.Route("/update", func(r chi.Router) {
+	// For non-secured requests (status, metrics reading) sign verification and authentication are disabled
+	plainR := r.With(
+		middleware.NewHTTPLogging(mh.baseLogger).Middleware,
+		middleware.NewCompressing(mh.baseLogger).Middleware,
+	)
+
+	// secure routes
+	secureR.Post("/update/{mtype}/{id}/{value}", mh.updateByPathHandler())
+	secureR.Route("/update", func(r chi.Router) {
 		r.Post("/", mh.updateByBodyHandler())
 	})
-	r.Route("/updates", func(r chi.Router) {
+	secureR.Route("/updates", func(r chi.Router) {
 		r.Post("/", mh.updateBatchHandler())
 	})
-	r.Route("/value", func(r chi.Router) {
+
+	// unsecure routes
+	plainR.Route("/value", func(r chi.Router) {
 		r.Post("/", mh.getJSONValueHandler())
 	})
-	r.Route("/ping", func(r chi.Router) {
-		r.Get("/", mh.pingStorageHandler())
-	})
+	plainR.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
 
 	// UI
-	r.Get("/", mh.showMetricsPageHandler())
+	plainR.Get("/", mh.showMetricsPageHandler())
 
 	// ping storage
-	r.Get("/value/{mtype}/{id}", mh.getPlainValueHandler())
+	plainR.Route("/ping", func(r chi.Router) {
+		r.Get("/", mh.pingStorageHandler())
+	})
 
 	return r
 }
@@ -219,15 +246,15 @@ func (mh *MetricsHandlers) updateByBodyHandler() http.HandlerFunc {
 // in case body JSON can't be unmarshalled or required data for update is missing, HTTP code 400 is written into response
 // in any other case error is considered unprocessable and HTTP code 500 is written
 func (mh *MetricsHandlers) updateByBody(rw http.ResponseWriter, r *http.Request) {
-	body, err := mh.decomp.ReadRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		errorhandling.NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+		errorhandling.NewValidationHandlerError(fmt.Sprintf("error reading request body: %v", err)).Render(rw)
 		return
 	}
 
 	metric := &model.Metrics{}
 	if err := json.Unmarshal(body, &metric); err != nil {
-		errorhandling.NewValidationHandlerError(fmt.Sprintf("error unmarshalling body: %v", err)).Render(rw)
+		errorhandling.NewValidationHandlerError(fmt.Sprintf("error unmarshalling request body: %v", err)).Render(rw)
 		return
 	}
 
@@ -277,9 +304,9 @@ func (mh *MetricsHandlers) updateBatchHandler() http.HandlerFunc {
 // in case body JSON can't be unmarshalled or any metric is invalid, HTTP code 400 is written into response
 // in any other case error is considered unprocessable and HTTP code 500 is written
 func (mh *MetricsHandlers) updateBatch(rw http.ResponseWriter, r *http.Request) {
-	body, err := mh.decomp.ReadRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		errorhandling.NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+		errorhandling.NewValidationHandlerError(fmt.Sprintf("error reading request body: %v", err)).Render(rw)
 		return
 	}
 
@@ -371,9 +398,9 @@ func (mh *MetricsHandlers) getJSONValueHandler() http.HandlerFunc {
 // in case metric doesn't exist in the storage, HTTP code 404 is written into response
 // in any other case error is considered unprocessable and HTTP code 500 is written
 func (mh *MetricsHandlers) getJSONValue(rw http.ResponseWriter, r *http.Request) {
-	body, err := mh.decomp.ReadRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		errorhandling.NewValidationHandlerError(fmt.Sprintf("error decoding body: %v", err)).Render(rw)
+		errorhandling.NewValidationHandlerError(fmt.Sprintf("error reading request body: %v", err)).Render(rw)
 		return
 	}
 

@@ -3,11 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
-	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/andrewsvn/metrics-overseer/internal/agent/accumulation"
 	"github.com/andrewsvn/metrics-overseer/internal/config/agentcfg"
@@ -48,16 +49,15 @@ func NewAgent(cfg *agentcfg.Config, l *zap.Logger) (*Agent, error) {
 func (a *Agent) Run() {
 	a.logger.Info("starting accumulation-overseer agent")
 
-	ctx, done := context.WithCancel(context.Background())
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	//ctx, done := context.WithCancel(context.Background())
+	ctx, cancelCtx := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer cancelCtx()
 
 	wg := &sync.WaitGroup{}
 	a.pollr.Start(ctx, wg)
 	a.repr.Start(ctx, wg)
 
-	<-stop
-	done()
+	<-ctx.Done()
 
 	a.logger.Info("shutting down accumulation-overseer agent...")
 	_, shutdownCancel := context.WithTimeout(context.Background(), a.gracePeriod)

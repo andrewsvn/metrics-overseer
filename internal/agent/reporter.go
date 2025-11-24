@@ -3,6 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/andrewsvn/metrics-overseer/internal/agent/accumulation"
 	"github.com/andrewsvn/metrics-overseer/internal/agent/reporting"
 	"github.com/andrewsvn/metrics-overseer/internal/agent/sending"
@@ -10,9 +14,6 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"go.uber.org/zap"
-	"strings"
-	"sync"
-	"time"
 )
 
 type Reporter struct {
@@ -33,7 +34,7 @@ func NewReporter(cfg *agentcfg.Config, storage *accumulation.Storage, l *zap.Log
 	)
 
 	serverAddr := strings.Trim(cfg.ServerAddr, "\"")
-	sndr, err := sending.NewRestSender(serverAddr, reportRetryPolicy, cfg.SecretKey, l)
+	sndr, err := sending.NewRestSender(serverAddr, reportRetryPolicy, cfg.SecretKey, cfg.PublicKeyPath, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sender: %w", err)
 	}

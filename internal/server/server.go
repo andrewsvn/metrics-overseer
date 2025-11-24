@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/andrewsvn/metrics-overseer/internal/audit"
@@ -59,17 +59,20 @@ func Run() error {
 		msrv.SubscribeAuditor(audit.NewHTTPWriter(cfg.AuditURL))
 	}
 
-	mhandlers := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
-	r := mhandlers.GetRouter()
+	mhandlers, err := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
+	if err != nil {
+		return fmt.Errorf("can't initialize metrics handlers: %w", err)
+	}
 
+	r := mhandlers.GetRouter()
 	addr := strings.Trim(cfg.Addr, "\"")
 	server := &http.Server{
 		Addr:    addr,
 		Handler: r,
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer cancel()
 
 	go func() {
 		logger.Sugar().Infow("starting metric-overseer server",
@@ -91,9 +94,10 @@ func Run() error {
 		}()
 	}
 
-	<-stop
+	<-ctx.Done()
+
 	logger.Info("shutting down metric-overseer server...")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.GracePeriodSec)*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(cfg.GracePeriodSec)*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)
