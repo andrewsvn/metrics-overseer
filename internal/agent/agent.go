@@ -50,7 +50,7 @@ func (a *Agent) Run() {
 	a.logger.Info("starting accumulation-overseer agent")
 
 	//ctx, done := context.WithCancel(context.Background())
-	ctx, done := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancelCtx := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer done()
 
 	wg := &sync.WaitGroup{}
