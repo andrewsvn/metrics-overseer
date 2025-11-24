@@ -51,7 +51,7 @@ func (a *Agent) Run() {
 
 	//ctx, done := context.WithCancel(context.Background())
 	ctx, cancelCtx := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	defer done()
+	defer cancelCtx()
 
 	wg := &sync.WaitGroup{}
 	a.pollr.Start(ctx, wg)
