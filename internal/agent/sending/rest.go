@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
@@ -155,6 +156,7 @@ func (rs *RestSender) SendMetricArray(metrics []*model.Metrics) error {
 }
 
 func (rs *RestSender) sendRequest(req *http.Request) error {
+	req.Header.Set("X-Real-IP", rs.getHostIPAddr())
 	resp, err := rs.cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request to server %s: %w", rs.addr, err)
@@ -189,4 +191,26 @@ func (rs *RestSender) sendRequest(req *http.Request) error {
 
 func (rs *RestSender) composePostMetricByPathURL(id string, mtype string, value string) string {
 	return fmt.Sprintf("%s/update/%s/%s/%s", rs.addr, mtype, id, value)
+}
+
+func (rs *RestSender) getHostIPAddr() string {
+	const loopback = "127.0.0.1"
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		rs.logger.Errorw("error getting host IP addresses", zap.Error(err))
+		return loopback
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+
+	// loopback address as a fail case
+	rs.logger.Warnw("no host IP address found")
+	return loopback
 }

@@ -64,6 +64,7 @@ type PostgresRetryConfig struct {
 type SecurityConfig struct {
 	SecretKey      string `env:"KEY" json:"key"`
 	PrivateKeyPath string `env:"CRYPTO_KEY" json:"crypto_key"`
+	TrustedSubnet  string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 }
 
 // AuditConfig contains settings related to audit of metrics updates - it can be forwarded to a file and/or
@@ -144,6 +145,8 @@ func (cfg *Config) bindFlags() {
 		"secret key for verifying requests and signing responses")
 	flag.StringVar(&cfg.PrivateKeyPath, "crypto-key", "",
 		"path to PEM file with RSA private key for decrypting requests (no decryption if empty)")
+	flag.StringVarP(&cfg.TrustedSubnet, "", "t", "",
+		"classified IP subnet address of trusted clients (checked via X-Real-IP header)")
 
 	flag.StringVar(&cfg.AuditFilePath, "audit-file", "",
 		"audit file path (should be specified to enable file audit)")
