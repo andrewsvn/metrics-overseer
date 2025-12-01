@@ -45,9 +45,10 @@ import (
 // @Tag.description endpoints group for rendering HTML pages
 
 type MetricsHandlers struct {
-	msrv        *service.MetricsService
-	securityCfg *servercfg.SecurityConfig
-	decrypter   encrypt.Decrypter
+	msrv          *service.MetricsService
+	securityCfg   *servercfg.SecurityConfig
+	trustedSubnet *net.IPNet
+	decrypter     encrypt.Decrypter
 
 	baseLogger *zap.Logger
 	logger     *zap.SugaredLogger
@@ -65,9 +66,10 @@ func NewMetricsHandlers(
 ) (*MetricsHandlers, error) {
 	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
 
+	var err error
+
 	var privKey *rsa.PrivateKey
 	if securityCfg.PrivateKeyPath != "" {
-		var err error
 		privKey, err = encrypt.ReadRSAPrivateKeyFromFile(securityCfg.PrivateKeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("error reading private key for decryption: %w", err)
@@ -75,12 +77,22 @@ func NewMetricsHandlers(
 		mhLogger.Infow("using RSA private key for request decryption")
 	}
 
+	var trustedSubnet *net.IPNet
+	if securityCfg.TrustedSubnet != "" {
+		_, trustedSubnet, err = net.ParseCIDR(securityCfg.TrustedSubnet)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing trusted subnet: %w", err)
+		}
+		mhLogger.Infow("using trusted subnet for request decryption: %s", securityCfg.TrustedSubnet)
+	}
+
 	return &MetricsHandlers{
-		msrv:        ms,
-		decrypter:   encrypt.NewRSAEngineBuilder().PrivateKey(privKey).Build(),
-		baseLogger:  logger,
-		logger:      mhLogger,
-		securityCfg: securityCfg,
+		msrv:          ms,
+		decrypter:     encrypt.NewRSAEngineBuilder().PrivateKey(privKey).Build(),
+		baseLogger:    logger,
+		logger:        mhLogger,
+		securityCfg:   securityCfg,
+		trustedSubnet: trustedSubnet,
 	}, nil
 }
 
@@ -94,7 +106,7 @@ func (mh *MetricsHandlers) GetRouter() *chi.Mux {
 	// - sign the body if secret key is available
 	secureR := r.With(
 		middleware.NewHTTPLogging(mh.baseLogger).Middleware,
-		middleware.NewAuthorization(mh.baseLogger, mh.securityCfg.SecretKey).Middleware,
+		middleware.NewAuthorization(mh.baseLogger, mh.securityCfg.SecretKey, mh.trustedSubnet).Middleware,
 		middleware.NewCompressing(mh.baseLogger).Middleware,
 		middleware.NewDecryption(mh.baseLogger, mh.decrypter).Middleware,
 	)
