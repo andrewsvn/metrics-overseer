@@ -99,14 +99,14 @@ func (auth *Authorization) verifyClientIP(rw http.ResponseWriter, r *http.Reques
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		auth.logger.Debugw("X-Real-IP header of an incoming request is invalid")
-		rw.WriteHeader(http.StatusUnauthorized)
+		rw.WriteHeader(http.StatusForbidden)
 		return false
 	}
 
 	subnet := ip.Mask(auth.trustedSubnet.Mask)
 	if !subnet.Equal(auth.trustedSubnet.IP) {
 		auth.logger.Debugw("X-Real-IP header of an incoming request is untrusted")
-		rw.WriteHeader(http.StatusUnauthorized)
+		rw.WriteHeader(http.StatusForbidden)
 		return false
 	}
 
