@@ -1,4 +1,4 @@
-package handler
+package restsrv
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/encrypt"
-	"github.com/andrewsvn/metrics-overseer/internal/handler/errorhandling"
-	"github.com/andrewsvn/metrics-overseer/internal/handler/middleware"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv/errorhandling"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv/middleware"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
@@ -64,7 +64,7 @@ func NewMetricsHandlers(
 	securityCfg *servercfg.SecurityConfig,
 	logger *zap.Logger,
 ) (*MetricsHandlers, error) {
-	mhLogger := logger.Sugar().With(zap.String("component", "metrics-handlers"))
+	mhLogger := logger.Sugar().With(zap.String("component", "restsrv-metrics-handlers"))
 
 	var err error
 
@@ -83,7 +83,7 @@ func NewMetricsHandlers(
 		if err != nil {
 			return nil, fmt.Errorf("error parsing trusted subnet: %w", err)
 		}
-		mhLogger.Infow("using trusted subnet for request decryption: %s", securityCfg.TrustedSubnet)
+		mhLogger.Infow("using trusted subnet for client remote address validation: %s", securityCfg.TrustedSubnet)
 	}
 
 	return &MetricsHandlers{

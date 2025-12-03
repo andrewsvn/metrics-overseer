@@ -33,10 +33,23 @@ func NewReporter(cfg *agentcfg.Config, storage *accumulation.Storage, l *zap.Log
 		time.Duration(cfg.RetryDelayIncrementSec)*time.Second,
 	)
 
-	serverAddr := strings.Trim(cfg.ServerAddr, "\"")
-	sndr, err := sending.NewRestSender(serverAddr, reportRetryPolicy, cfg.SecretKey, cfg.PublicKeyPath, l)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sender: %w", err)
+	var sndr sending.MetricSender
+	var err error
+
+	serverGRPCAddr := strings.Trim(cfg.ServerGRPCAddr, "\"")
+	if serverGRPCAddr != "" {
+		// use gRPC sender for metrics reporting
+		sndr, err = sending.NewGRPCSender(serverGRPCAddr, reportRetryPolicy, l)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create sender: %w", err)
+		}
+	} else {
+		// default mode - REST sender for reporting
+		serverAddr := strings.Trim(cfg.ServerAddr, "\"")
+		sndr, err = sending.NewRestSender(serverAddr, reportRetryPolicy, cfg.SecretKey, cfg.PublicKeyPath, l)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create sender: %w", err)
+		}
 	}
 
 	rLogger := l.Sugar().With("component", "agent-reporting")

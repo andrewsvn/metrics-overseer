@@ -43,6 +43,7 @@ type Config struct {
 	ReportRetryConfig
 
 	ServerAddr        string `env:"ADDRESS" json:"address"`
+	ServerGRPCAddr    string `env:"GRPC_ADDRESS" json:"grpc_address"`
 	PollIntervalSec   int    `env:"POLL_INTERVAL" json:"poll_interval_sec"`
 	ReportIntervalSec int    `env:"REPORT_INTERVAL" json:"report_interval_sec"`
 	GracePeriodSec    int    `env:"AGENT_GRACE_PERIOD" json:"grace_period_sec"`
@@ -86,6 +87,8 @@ func Read() (*Config, error) {
 func (cfg *Config) bindFlags() {
 	flag.StringVarP(&cfg.ServerAddr, "addr", "a", "",
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultServerAddr))
+	flag.StringVar(&cfg.ServerGRPCAddr, "grpcsrv-addr", "",
+		"server gRPC address in form of host:port")
 	flag.IntVarP(&cfg.PollIntervalSec, "poll-interval", "p", 0,
 		fmt.Sprintf("accumulation polling interval, seconds (default: %d)", defaultPollIntervalSec))
 	flag.IntVarP(&cfg.ReportIntervalSec, "report-interval", "r", 0,
@@ -94,15 +97,15 @@ func (cfg *Config) bindFlags() {
 		fmt.Sprintf("accumulation agent graceful shutdown period, seconds (default: %d)", defaultGracePeriodSec))
 
 	flag.IntVarP(&cfg.MaxNumberOfRequests, "simultaneous", "l", 0,
-		fmt.Sprintf("maximum number of simultaneous reporting requests (default: 0). "+
-			"If 0, single-thread batching is used"))
+		"maximum number of simultaneous reporting requests (default: 0). If 0, single-thread batching is used")
 
 	flag.StringVarP(&cfg.SecretKey, "secret-key", "k", "",
 		"secret key for request signing")
 	flag.StringVar(&cfg.PublicKeyPath, "crypto-key", "",
 		"path to PEM file with RSA public key for encrypting requests (no encryption if empty)")
 
-	flag.StringVarP(&cfg.ConfigFile, "config", "c", "", "path to JSON config file with default configuration")
+	flag.StringVarP(&cfg.ConfigFile, "config", "c", "",
+		"path to JSON config file with default configuration")
 }
 
 func NewConfigFromJSONFile(path string) (*Config, error) {

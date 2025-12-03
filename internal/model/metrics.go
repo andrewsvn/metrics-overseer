@@ -34,6 +34,24 @@ func NewMetrics(id string, mType string, delta *int64, value *float64) *Metrics 
 	return m
 }
 
+// NewMetricsFromStringValue is a convenience constructor for creating counter or gauge metrics and
+// providing its corresponding value as string to be parsed either as counter or as gauge depending on type
+// if provided string value can't be parsed as number of the corresponding type, metric is initialized with zero value
+// so it's caller responsibility to make sure correct string value is provided and correct type is selected
+func NewMetricsFromStringValue(id string, mType string, value string) *Metrics {
+	switch mType {
+	case Counter:
+		delta, _ := strconv.ParseInt(value, 10, 64)
+		return NewCounterMetricsWithDelta(id, delta)
+	case Gauge:
+		value, _ := strconv.ParseFloat(value, 64)
+		return NewGaugeMetricsWithValue(id, value)
+	default:
+		// this should not happen
+		return NewMetrics(id, mType, nil, nil)
+	}
+}
+
 func NewGaugeMetrics(id string) *Metrics {
 	m := &Metrics{
 		ID:    id,

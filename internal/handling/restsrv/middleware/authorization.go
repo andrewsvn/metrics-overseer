@@ -8,7 +8,8 @@ import (
 	"net/http"
 
 	"github.com/andrewsvn/metrics-overseer/internal/encrypt"
-	"github.com/andrewsvn/metrics-overseer/internal/handler/errorhandling"
+	"github.com/andrewsvn/metrics-overseer/internal/handling"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv/errorhandling"
 	"go.uber.org/zap"
 )
 
@@ -91,24 +92,14 @@ func (auth *Authorization) verifySignature(rw http.ResponseWriter, r *http.Reque
 func (auth *Authorization) verifyClientIP(rw http.ResponseWriter, r *http.Request) bool {
 	ipStr := r.Header.Get("X-Real-IP")
 	if ipStr == "" {
-		auth.logger.Debugw("X-Real-IP header of an incoming request is missing")
 		rw.WriteHeader(http.StatusUnauthorized)
 		return false
 	}
 
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		auth.logger.Debugw("X-Real-IP header of an incoming request is invalid")
+	err := handling.VerifyTrustedIPAddress(auth.trustedSubnet, ipStr)
+	if err != nil {
 		rw.WriteHeader(http.StatusForbidden)
 		return false
 	}
-
-	subnet := ip.Mask(auth.trustedSubnet.Mask)
-	if !subnet.Equal(auth.trustedSubnet.IP) {
-		auth.logger.Debugw("X-Real-IP header of an incoming request is untrusted")
-		rw.WriteHeader(http.StatusForbidden)
-		return false
-	}
-
 	return true
 }

@@ -40,3 +40,9 @@ POSTGRES_UP:
 
 POSTGRES_DOWN:
 	docker stop metrics-postgres
+
+PROTO_COMPILE:
+	protoc --go_out=. --go_opt=paths=source_relative \
+           --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+           --go_opt=default_api_level=API_OPAQUE \
+           internal/proto/metrics.proto
