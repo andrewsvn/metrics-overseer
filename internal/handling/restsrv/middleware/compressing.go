@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/andrewsvn/metrics-overseer/internal/compress"
-	"github.com/andrewsvn/metrics-overseer/internal/handler/errorhandling"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv/errorhandling"
 	"go.uber.org/zap"
 )
 

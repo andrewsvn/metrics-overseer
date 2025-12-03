@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"os/signal"
 	"strings"
@@ -13,13 +15,15 @@ import (
 	"github.com/andrewsvn/metrics-overseer/internal/audit"
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
-	"github.com/andrewsvn/metrics-overseer/internal/handler"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/grpcsrv"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
 	"github.com/andrewsvn/metrics-overseer/migrations"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
 	_ "net/http/pprof"
 )
@@ -59,7 +63,11 @@ func Run() error {
 		msrv.SubscribeAuditor(audit.NewHTTPWriter(cfg.AuditURL))
 	}
 
-	mhandlers, err := handler.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer cancel()
+
+	// metrics rest server
+	mhandlers, err := restsrv.NewMetricsHandlers(msrv, &cfg.SecurityConfig, logger)
 	if err != nil {
 		return fmt.Errorf("can't initialize metrics handlers: %w", err)
 	}
@@ -71,9 +79,6 @@ func Run() error {
 		Handler: r,
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	defer cancel()
-
 	go func() {
 		logger.Sugar().Infow("starting metric-overseer server",
 			"address", addr,
@@ -82,6 +87,27 @@ func Run() error {
 			logger.Fatal("failed to start server", zap.Error(err))
 		}
 	}()
+
+	// metrics grpc server
+	var gsrv *grpc.Server
+	if cfg.GRPCAddr != "" {
+		listen, err := net.Listen("tcp", ":3200")
+		if err != nil {
+			log.Fatal(err)
+		}
+		metricsGsrv, err := grpcsrv.NewMetricsServer(msrv, &cfg.SecurityConfig, logger)
+		if err != nil {
+			return fmt.Errorf("can't initialize gRPC metrics server: %w", err)
+		}
+
+		gsrv = metricsGsrv.GetGRPCServer()
+		go func() {
+			logger.Sugar().Infow("starting gRPC metrics server", "address", cfg.GRPCAddr)
+			if err := gsrv.Serve(listen); err != nil {
+				logger.Fatal("failed to start gRPC metrics server", zap.Error(err))
+			}
+		}()
+	}
 
 	// pprof server
 	if cfg.PprofAddr != "" {
@@ -99,8 +125,13 @@ func Run() error {
 	logger.Info("shutting down metric-overseer server...")
 	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(cfg.GracePeriodSec)*time.Second)
 	defer cancel()
+
 	if err := server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)
+	}
+
+	if gsrv != nil {
+		gsrv.GracefulStop()
 	}
 
 	err = stor.Close()

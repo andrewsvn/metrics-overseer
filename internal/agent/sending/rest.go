@@ -16,6 +16,8 @@ import (
 )
 
 type RestSender struct {
+	IPSender
+
 	addr string
 
 	secretKey []byte
@@ -36,7 +38,7 @@ func NewRestSender(
 	rsaKeyPath string,
 	logger *zap.Logger,
 ) (*RestSender, error) {
-	restLogger := logger.Sugar().With(zap.String("component", "rest-sender"))
+	restLogger := logger.Sugar().With(zap.String("component", "restsrv-sender"))
 
 	enrichedAddr, err := enrichServerAddress(addr)
 	if err != nil {
@@ -61,6 +63,9 @@ func NewRestSender(
 	}
 
 	rs := &RestSender{
+		IPSender: IPSender{
+			logger: restLogger,
+		},
 		addr:      enrichedAddr,
 		cl:        &http.Client{},
 		cwe:       compress.NewGzipWriteEngine(),
@@ -155,6 +160,7 @@ func (rs *RestSender) SendMetricArray(metrics []*model.Metrics) error {
 }
 
 func (rs *RestSender) sendRequest(req *http.Request) error {
+	req.Header.Set("X-Real-IP", rs.getHostIPAddr())
 	resp, err := rs.cl.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request to server %s: %w", rs.addr, err)

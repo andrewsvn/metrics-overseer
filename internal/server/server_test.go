@@ -14,13 +14,13 @@ import (
 
 	"github.com/andrewsvn/metrics-overseer/internal/config/servercfg"
 	"github.com/andrewsvn/metrics-overseer/internal/db"
+	"github.com/andrewsvn/metrics-overseer/internal/handling/restsrv"
 	"github.com/andrewsvn/metrics-overseer/internal/logging"
 	"github.com/andrewsvn/metrics-overseer/internal/mocks"
 	"github.com/andrewsvn/metrics-overseer/internal/retrying"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/andrewsvn/metrics-overseer/internal/handler"
 	"github.com/andrewsvn/metrics-overseer/internal/model"
 	"github.com/andrewsvn/metrics-overseer/internal/repository"
 	"github.com/andrewsvn/metrics-overseer/internal/service"
@@ -502,7 +502,7 @@ func setupServerWithMemStorage() *httptest.Server {
 	gm.SetGauge(3.14)
 	_ = msrv.AccumulateMetric(ctx, gm, "")
 
-	mhandlers, _ := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
+	mhandlers, _ := restsrv.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }
@@ -512,7 +512,7 @@ func setupServerWithDummyDBStorage(conn db.Connection) *httptest.Server {
 
 	mstor := repository.NewPostgresDBStorage(conn, logger, &retrying.NoRetryPolicy{})
 	msrv := service.NewMetricsService(mstor, logger)
-	mhandlers, _ := handler.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
+	mhandlers, _ := restsrv.NewMetricsHandlers(msrv, &servercfg.SecurityConfig{}, logger)
 
 	return httptest.NewServer(mhandlers.GetRouter())
 }

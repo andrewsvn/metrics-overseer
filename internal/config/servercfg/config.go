@@ -64,6 +64,7 @@ type PostgresRetryConfig struct {
 type SecurityConfig struct {
 	SecretKey      string `env:"KEY" json:"key"`
 	PrivateKeyPath string `env:"CRYPTO_KEY" json:"crypto_key"`
+	TrustedSubnet  string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 }
 
 // AuditConfig contains settings related to audit of metrics updates - it can be forwarded to a file and/or
@@ -84,6 +85,7 @@ type Config struct {
 
 	LogLevel       string `env:"SERVER_LOG_LEVEL" json:"server_log_level"`
 	Addr           string `env:"ADDRESS" json:"address"`
+	GRPCAddr       string `env:"GRPC_ADDRESS" json:"grpc_address"`
 	GracePeriodSec int    `env:"SERVER_GRACE_PERIOD" json:"server_grace_period"`
 	PprofAddr      string `env:"PPROF_ADDRESS" json:"pprof_address"`
 
@@ -124,6 +126,8 @@ func Read() (*Config, error) {
 func (cfg *Config) bindFlags() {
 	flag.StringVarP(&cfg.Addr, "addr", "a", "",
 		fmt.Sprintf("server address in form of host:port (default: %s)", defaultAddr))
+	flag.StringVar(&cfg.GRPCAddr, "grpcsrv-addr", "",
+		"gRPC server address in form of host:port (optional)")
 	flag.IntVar(&cfg.GracePeriodSec, "grace-period", 0,
 		fmt.Sprintf("server grace period in seconds (default: %d)", defaultGracePeriodSec))
 	flag.StringVar(&cfg.PprofAddr, "pprof", "",
@@ -144,6 +148,8 @@ func (cfg *Config) bindFlags() {
 		"secret key for verifying requests and signing responses")
 	flag.StringVar(&cfg.PrivateKeyPath, "crypto-key", "",
 		"path to PEM file with RSA private key for decrypting requests (no decryption if empty)")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "",
+		"classified IP subnet address of trusted clients (checked via X-Real-IP header)")
 
 	flag.StringVar(&cfg.AuditFilePath, "audit-file", "",
 		"audit file path (should be specified to enable file audit)")
